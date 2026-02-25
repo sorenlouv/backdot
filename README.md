@@ -1,6 +1,10 @@
-# backdot
+<p align="center">
+  <img src="logo-small.png" alt="backdot" width="400" />
+</p>
 
-Back up dotfiles and gitignored files to a private Git repo — on demand or on a daily schedule.
+<h1 align="center">backdot</h1>
+
+<p align="center">Back up dotfiles and gitignored files to a private Git repo — on demand or on a daily schedule.</p>
 
 ## Getting started
 
