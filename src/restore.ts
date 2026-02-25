@@ -5,7 +5,7 @@ import ora from "ora";
 import { checkbox } from "@inquirer/prompts";
 import { loadConfig } from "./config.js";
 import { gitPull } from "./git.js";
-import { STAGING_DIR } from "./staging.js";
+import { STAGING_DIR, machineDir } from "./staging.js";
 import { logger } from "./log.js";
 
 const HOME = os.homedir();
@@ -24,15 +24,36 @@ function walkDir(dir: string): string[] {
   return results;
 }
 
+function listMachines(): string[] {
+  if (!fs.existsSync(STAGING_DIR)) return [];
+  return fs
+    .readdirSync(STAGING_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && e.name !== ".git")
+    .map((e) => e.name);
+}
+
 export async function restore(): Promise<void> {
   logger.info("Starting restore");
   const config = loadConfig();
+  const baseDir = machineDir(config.machine);
 
   const spinner = ora("Fetching latest backup").start();
   await gitPull(config.repository);
   spinner.text = "Resolving files";
 
-  const stagedFiles = walkDir(STAGING_DIR);
+  if (!fs.existsSync(baseDir)) {
+    spinner.stop();
+    const available = listMachines();
+    if (available.length > 0) {
+      console.log(`\n  No backup found for machine "${config.machine}".`);
+      console.log(`  Available machines: ${available.join(", ")}\n`);
+    } else {
+      console.log(`\n  No backup found for machine "${config.machine}". The repository is empty.\n`);
+    }
+    return;
+  }
+
+  const stagedFiles = walkDir(baseDir);
   logger.info(`Found ${stagedFiles.length} file(s) in backup repository`);
 
   if (stagedFiles.length === 0) {
@@ -42,7 +63,7 @@ export async function restore(): Promise<void> {
   }
 
   const fileMappings = stagedFiles.map((src) => {
-    const rel = path.relative(STAGING_DIR, src);
+    const rel = path.relative(baseDir, src);
     return { src, dest: path.join(HOME, rel), rel };
   });
 

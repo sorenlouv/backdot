@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { z } from "zod";
 
-const CONFIG_PATH = path.join(os.homedir(), ".backdot.json");
+export const CONFIG_PATH = path.join(os.homedir(), ".backdot.json");
 
 export function expandTilde(p: string): string {
   if (p.startsWith("~/") || p === "~") {
@@ -17,6 +17,7 @@ const pathList = z.array(z.string().min(1).transform(expandTilde)).optional().de
 const ConfigSchema = z
   .object({
     repository: z.string().min(1),
+    machine: z.string().min(1),
     "files.gitignored": pathList,
     "files.match": pathList,
   })
@@ -25,6 +26,7 @@ const ConfigSchema = z
   })
   .transform((c) => ({
     repository: c.repository,
+    machine: c.machine,
     files: {
       gitignored: c["files.gitignored"],
       match: c["files.match"],
@@ -52,5 +54,13 @@ export function loadConfig(): Config {
     throw new Error(`Invalid JSON in config file: ${CONFIG_PATH}`);
   }
 
-  return ConfigSchema.parse(parsed);
+  const result = ConfigSchema.safeParse(parsed);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => {
+      const path = i.path.length > 0 ? `"${i.path.join(".")}"` : "config";
+      return `  - ${path}: ${i.message}`;
+    });
+    throw new Error(`Invalid config in ${CONFIG_PATH}:\n${messages.join("\n")}`);
+  }
+  return result.data;
 }

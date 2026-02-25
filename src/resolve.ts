@@ -35,6 +35,8 @@ function resolveGlob(pattern: string): string[] {
   }
 }
 
+const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
+
 /**
  * Resolve all file entries to absolute paths.
  * Skips entries that fail resolution and logs warnings.
@@ -50,12 +52,19 @@ export function resolveFiles(files: Config["files"]): string[] {
     allFiles.push(...resolveGlob(pattern));
   }
 
-  return allFiles.filter((filePath) => {
+  const unique = [...new Set(allFiles)];
+
+  return unique.filter((filePath) => {
     try {
       fs.accessSync(filePath, fs.constants.R_OK);
       const stat = fs.statSync(filePath);
       if (!stat.isFile()) {
         logger.warn(`Not a regular file, skipping: ${filePath}`);
+        return false;
+      }
+      if (stat.size > LARGE_FILE_THRESHOLD) {
+        const sizeMB = (stat.size / 1024 / 1024).toFixed(1);
+        logger.warn(`Large file (${sizeMB} MB), skipping: ${filePath}`);
         return false;
       }
       return true;

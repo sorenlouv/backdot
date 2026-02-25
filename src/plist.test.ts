@@ -14,8 +14,7 @@ vi.mock("node:fs", () => ({
 }));
 
 vi.mock("./log.js", () => ({
-  log: vi.fn(),
-  logError: vi.fn(),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 import fs from "node:fs";

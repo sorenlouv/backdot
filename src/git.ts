@@ -12,23 +12,20 @@ export async function gitPull(repository: string): Promise<void> {
     await git.reset(["--hard", `origin/${branch}`]);
     await git.clean(CleanOptions.FORCE, ["-d"]);
   } else {
-    await simpleGit().clone(repository, STAGING_DIR);
+    try {
+      await simpleGit().clone(repository, STAGING_DIR);
+    } catch {
+      fs.mkdirSync(STAGING_DIR, { recursive: true });
+      const git = simpleGit(STAGING_DIR);
+      await git.init();
+      await git.addRemote("origin", repository);
+    }
   }
   logger.info("Synced staging directory from remote");
 }
 
-export async function gitSync(repository: string): Promise<void> {
-  if (!fs.existsSync(STAGING_DIR)) {
-    fs.mkdirSync(STAGING_DIR, { recursive: true });
-  }
-
+export async function gitCommitAndPush(): Promise<void> {
   const git = simpleGit(STAGING_DIR);
-
-  if (!fs.existsSync(path.join(STAGING_DIR, ".git"))) {
-    logger.info("Initializing new git repository in staging directory");
-    await git.init();
-    await git.addRemote("origin", repository);
-  }
 
   await git.add(".");
 
@@ -41,14 +38,6 @@ export async function gitSync(repository: string): Promise<void> {
   const date = new Date().toISOString().split("T")[0];
   const message = `Automated backup: ${date}`;
   await git.commit(message);
-  logger.info(`Committed: ${message}`);
-
-  try {
-    await git.push(["-u", "origin", "HEAD"]);
-    logger.info("Pushed to remote");
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`Push failed: ${msg}`);
-    throw new Error(`Push failed: ${msg}`);
-  }
+  await git.push(["-u", "origin", "HEAD"]);
+  logger.info(`Committed and pushed: ${message}`);
 }

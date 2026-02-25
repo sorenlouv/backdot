@@ -3,10 +3,22 @@
   "version": "1.0.0",
   "description": "Lightweight CLI to backup dotfiles and gitignored files to a Git repo on a daily schedule",
   "type": "module",
+  "license": "MIT",
   "main": "dist/cli.js",
   "bin": {
     "backdot": "dist/cli.js"
   },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "dotfiles",
+    "backup",
+    "git",
+    "cli",
+    "launchd",
+    "gitignore"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",

@@ -1,36 +1,61 @@
 #!/usr/bin/env node
 
+import fs from "node:fs";
+import path from "node:path";
 import ora from "ora";
-import { loadConfig } from "./config.js";
+import { loadConfig, CONFIG_PATH } from "./config.js";
 import { resolveFiles } from "./resolve.js";
-import { copyToStaging } from "./staging.js";
-import { gitSync } from "./git.js";
+import { cleanStaging, copyToStaging, writeRepoReadme } from "./staging.js";
+import { gitPull, gitCommitAndPush } from "./git.js";
 import { restore } from "./restore.js";
 import { setupLaunchd, uninstallLaunchd, isScheduled } from "./plist.js";
 import { logger } from "./log.js";
+
+function getVersion(): string {
+  const pkgPath = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../package.json");
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 async function backup(): Promise<void> {
   logger.info("Starting backup");
   const config = loadConfig();
   logger.info(`Repository: ${config.repository}`);
+  logger.info(`Machine: ${config.machine}`);
 
   const spinner = ora("Resolving files").start();
-  const files = resolveFiles(config.files);
-  logger.info(`Resolved ${files.length} file(s)`);
+  try {
+    const userFiles = resolveFiles(config.files);
+    logger.info(`Resolved ${userFiles.length} file(s)`);
 
-  if (files.length === 0) {
-    spinner.info("No files resolved, nothing to back up");
-    return;
+    if (userFiles.length === 0) {
+      spinner.info("No files resolved, nothing to back up");
+      return;
+    }
+
+    const files = [...userFiles, CONFIG_PATH];
+
+    spinner.text = "Syncing with remote";
+    await gitPull(config.repository);
+
+    spinner.text = `Copying ${files.length} file(s) to staging`;
+    cleanStaging(config.machine);
+    copyToStaging(files, config.machine);
+    writeRepoReadme();
+
+    spinner.text = "Pushing to remote";
+    await gitCommitAndPush();
+
+    spinner.succeed("Backup complete");
+    console.log();
+  } catch (err) {
+    spinner.fail("Backup failed");
+    throw err;
   }
-
-  spinner.text = `Copying ${files.length} file(s) to staging`;
-  copyToStaging(files);
-
-  spinner.text = "Pushing to remote";
-  await gitSync(config.repository);
-
-  spinner.succeed("Backup complete");
-  console.log();
 
   logger.info("Backup complete");
 }
@@ -43,15 +68,18 @@ function status(): void {
   try {
     const config = loadConfig();
     console.log(`  Repo:      ${config.repository}`);
+    console.log(`  Machine:   ${config.machine}`);
     console.log();
 
     const spinner = ora("Resolving files").start();
-    const files = resolveFiles(config.files);
+    const userFiles = resolveFiles(config.files);
 
-    if (files.length === 0) {
+    if (userFiles.length === 0) {
       spinner.warn("No files resolved. Check your ~/.backdot.json entries.");
     } else {
-      spinner.succeed(`${files.length} file(s) resolved`);
+      const files = [...userFiles, CONFIG_PATH];
+      spinner.stop();
+      console.log(`${files.length} file(s) resolved:`);
       console.log();
       for (const file of files) {
         console.log(`  ${file}`);
@@ -66,6 +94,12 @@ function status(): void {
   console.log();
 }
 
+function requireMacOS(): void {
+  if (process.platform !== "darwin") {
+    throw new Error("Scheduling is only supported on macOS (launchd). Use cron or systemd on Linux.");
+  }
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -74,13 +108,17 @@ async function main(): Promise<void> {
     if (command === "--backup") {
       await backup();
     } else if (command === "--schedule") {
+      requireMacOS();
       setupLaunchd();
     } else if (command === "--unschedule") {
+      requireMacOS();
       uninstallLaunchd();
     } else if (command === "--status") {
       status();
     } else if (command === "--restore") {
       await restore();
+    } else if (command === "--version") {
+      console.log(getVersion());
     } else {
       console.log();
       console.log("  Usage: backdot <command>");
@@ -92,6 +130,7 @@ async function main(): Promise<void> {
       console.log("    --schedule     Install daily backup schedule (macOS launchd)");
       console.log("    --unschedule   Remove the daily backup schedule");
       console.log("    --status       Show schedule and resolved files");
+      console.log("    --version      Show version");
       console.log();
       if (command && command !== "--help") {
         console.error(`  Unknown command: ${command}`);

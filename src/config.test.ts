@@ -53,24 +53,46 @@ describe("loadConfig", () => {
 
   it("throws when repository is missing", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ "files.match": ["~/.zshrc"] }));
-    expect(() => loadConfig()).toThrow();
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ machine: "my-laptop", "files.match": ["~/.zshrc"] }),
+    );
+    expect(() => loadConfig()).toThrow("Invalid config");
   });
 
   it("throws when repository is empty", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
-      JSON.stringify({ repository: "", "files.match": ["~/.zshrc"] }),
+      JSON.stringify({ repository: "", machine: "my-laptop", "files.match": ["~/.zshrc"] }),
     );
-    expect(() => loadConfig()).toThrow();
+    expect(() => loadConfig()).toThrow("Invalid config");
+  });
+
+  it("throws when machine is missing", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ repository: "git@github.com:test/repo.git", "files.match": ["~/.zshrc"] }),
+    );
+    expect(() => loadConfig()).toThrow("Invalid config");
+  });
+
+  it("throws when machine is empty", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({
+        repository: "git@github.com:test/repo.git",
+        machine: "",
+        "files.match": ["~/.zshrc"],
+      }),
+    );
+    expect(() => loadConfig()).toThrow("Invalid config");
   });
 
   it("throws when both file lists are missing", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
-      JSON.stringify({ repository: "git@github.com:test/repo.git" }),
+      JSON.stringify({ repository: "git@github.com:test/repo.git", machine: "my-laptop" }),
     );
-    expect(() => loadConfig()).toThrow();
+    expect(() => loadConfig()).toThrow("Invalid config");
   });
 
   it("throws when both file lists are empty", () => {
@@ -78,11 +100,12 @@ describe("loadConfig", () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
         repository: "git@github.com:test/repo.git",
+        machine: "my-laptop",
         "files.gitignored": [],
         "files.match": [],
       }),
     );
-    expect(() => loadConfig()).toThrow();
+    expect(() => loadConfig()).toThrow("Invalid config");
   });
 
   it("throws when a path is empty", () => {
@@ -90,10 +113,19 @@ describe("loadConfig", () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
         repository: "git@github.com:test/repo.git",
+        machine: "my-laptop",
         "files.match": [""],
       }),
     );
-    expect(() => loadConfig()).toThrow();
+    expect(() => loadConfig()).toThrow("Invalid config");
+  });
+
+  it("includes field path in validation error message", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ repository: 123, machine: "my-laptop", "files.match": ["~/.zshrc"] }),
+    );
+    expect(() => loadConfig()).toThrow(/repository/);
   });
 
   it("parses config with only files.gitignored", () => {
@@ -101,11 +133,13 @@ describe("loadConfig", () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
         repository: "git@github.com:test/repo.git",
+        machine: "my-laptop",
         "files.gitignored": ["~/project"],
       }),
     );
 
     const config = loadConfig();
+    expect(config.machine).toBe("my-laptop");
     expect(config.files.gitignored).toEqual([`${HOME}/project`]);
     expect(config.files.match).toEqual([]);
   });
@@ -115,6 +149,7 @@ describe("loadConfig", () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
         repository: "git@github.com:test/repo.git",
+        machine: "my-laptop",
         "files.match": ["~/.zshrc"],
       }),
     );
@@ -129,6 +164,7 @@ describe("loadConfig", () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
         repository: "git@github.com:test/repo.git",
+        machine: "my-laptop",
         "files.gitignored": ["~/project"],
         "files.match": ["~/.zshrc", "~/.config/ghostty/**"],
       }),
@@ -136,6 +172,7 @@ describe("loadConfig", () => {
 
     const config = loadConfig();
     expect(config.repository).toBe("git@github.com:test/repo.git");
+    expect(config.machine).toBe("my-laptop");
     expect(config.files.gitignored).toEqual([`${HOME}/project`]);
     expect(config.files.match).toEqual([`${HOME}/.zshrc`, `${HOME}/.config/ghostty/**`]);
   });

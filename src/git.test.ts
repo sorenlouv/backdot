@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { CleanOptions } from "simple-git";
 
 const mockGit = {
   init: vi.fn().mockResolvedValue(undefined),
@@ -7,10 +8,16 @@ const mockGit = {
   status: vi.fn(),
   commit: vi.fn().mockResolvedValue(undefined),
   push: vi.fn().mockResolvedValue(undefined),
+  fetch: vi.fn().mockResolvedValue(undefined),
+  revparse: vi.fn().mockResolvedValue("main"),
+  reset: vi.fn().mockResolvedValue(undefined),
+  clean: vi.fn().mockResolvedValue(undefined),
+  clone: vi.fn().mockResolvedValue(undefined),
 };
 
 vi.mock("simple-git", () => ({
   simpleGit: vi.fn(() => mockGit),
+  CleanOptions: { FORCE: "f" },
 }));
 
 vi.mock("node:fs", () => ({
@@ -21,8 +28,7 @@ vi.mock("node:fs", () => ({
 }));
 
 vi.mock("./log.js", () => ({
-  log: vi.fn(),
-  logError: vi.fn(),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("./staging.js", () => ({
@@ -30,45 +36,65 @@ vi.mock("./staging.js", () => ({
 }));
 
 import fs from "node:fs";
-import { gitSync } from "./git.js";
+import { gitPull, gitCommitAndPush } from "./git.js";
 
-describe("gitSync", () => {
+describe("gitPull", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockGit.fetch.mockResolvedValue(undefined);
+    mockGit.revparse.mockResolvedValue("main");
+    mockGit.reset.mockResolvedValue(undefined);
+    mockGit.clean.mockResolvedValue(undefined);
+    mockGit.clone.mockResolvedValue(undefined);
     mockGit.init.mockResolvedValue(undefined);
     mockGit.addRemote.mockResolvedValue(undefined);
+  });
+
+  it("fetches and hard resets when .git exists", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    await gitPull("git@github.com:test/repo.git");
+
+    expect(mockGit.fetch).toHaveBeenCalledWith("origin");
+    expect(mockGit.reset).toHaveBeenCalledWith(["--hard", "origin/main"]);
+    expect(mockGit.clean).toHaveBeenCalledWith(CleanOptions.FORCE, ["-d"]);
+  });
+
+  it("clones when .git does not exist", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    await gitPull("git@github.com:test/repo.git");
+
+    expect(mockGit.clone).toHaveBeenCalledWith(
+      "git@github.com:test/repo.git",
+      "/mock/staging"
+    );
+  });
+
+  it("falls back to init when clone fails (empty remote)", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    mockGit.clone.mockRejectedValue(new Error("empty repository"));
+
+    await gitPull("git@github.com:test/repo.git");
+
+    expect(fs.mkdirSync).toHaveBeenCalledWith("/mock/staging", { recursive: true });
+    expect(mockGit.init).toHaveBeenCalled();
+    expect(mockGit.addRemote).toHaveBeenCalledWith("origin", "git@github.com:test/repo.git");
+  });
+});
+
+describe("gitCommitAndPush", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
     mockGit.add.mockResolvedValue(undefined);
     mockGit.commit.mockResolvedValue(undefined);
     mockGit.push.mockResolvedValue(undefined);
   });
 
-  it("initializes a new repo when .git does not exist", async () => {
-    vi.mocked(fs.existsSync).mockImplementation((p) => {
-      return !String(p).endsWith(".git");
-    });
-    mockGit.status.mockResolvedValue({ isClean: () => true });
-
-    await gitSync("git@github.com:test/repo.git");
-
-    expect(mockGit.init).toHaveBeenCalled();
-    expect(mockGit.addRemote).toHaveBeenCalledWith("origin", "git@github.com:test/repo.git");
-  });
-
-  it("skips init when .git already exists", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    mockGit.status.mockResolvedValue({ isClean: () => true });
-
-    await gitSync("git@github.com:test/repo.git");
-
-    expect(mockGit.init).not.toHaveBeenCalled();
-    expect(mockGit.addRemote).not.toHaveBeenCalled();
-  });
-
   it("skips commit and push when status is clean", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.status.mockResolvedValue({ isClean: () => true });
 
-    await gitSync("git@github.com:test/repo.git");
+    await gitCommitAndPush();
 
     expect(mockGit.add).toHaveBeenCalledWith(".");
     expect(mockGit.commit).not.toHaveBeenCalled();
@@ -76,21 +102,11 @@ describe("gitSync", () => {
   });
 
   it("commits and pushes when there are changes", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.status.mockResolvedValue({ isClean: () => false });
 
-    await gitSync("git@github.com:test/repo.git");
+    await gitCommitAndPush();
 
     expect(mockGit.commit).toHaveBeenCalledWith(expect.stringContaining("Automated backup:"));
     expect(mockGit.push).toHaveBeenCalledWith(["-u", "origin", "HEAD"]);
-  });
-
-  it("creates staging dir if it does not exist", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    mockGit.status.mockResolvedValue({ isClean: () => true });
-
-    await gitSync("git@github.com:test/repo.git");
-
-    expect(fs.mkdirSync).toHaveBeenCalledWith("/mock/staging", { recursive: true });
   });
 });

@@ -18,7 +18,7 @@ vi.mock("fast-glob", () => ({
 }));
 
 vi.mock("./log.js", () => ({
-  logWarn: vi.fn(),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 import fs from "node:fs";
@@ -26,8 +26,12 @@ import { execSync } from "node:child_process";
 import fg from "fast-glob";
 import { resolveFiles } from "./resolve.js";
 
-const fileStatMock = { isFile: () => true } as ReturnType<typeof fs.statSync>;
-const dirStatMock = { isFile: () => false } as ReturnType<typeof fs.statSync>;
+const fileStatMock = { isFile: () => true, size: 1024 } as ReturnType<typeof fs.statSync>;
+const dirStatMock = { isFile: () => false, size: 0 } as ReturnType<typeof fs.statSync>;
+const largeFileStatMock = {
+  isFile: () => true,
+  size: 20 * 1024 * 1024,
+} as ReturnType<typeof fs.statSync>;
 
 function makeFiles(
   gitignored: string[] = [],
@@ -107,5 +111,35 @@ describe("resolveFiles", () => {
 
     const files = resolveFiles(makeFiles(["/home/user/project"]));
     expect(files).toEqual([]);
+  });
+
+  it("deduplicates files that appear in both gitignored and match", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(execSync).mockReturnValue(".env\n");
+    vi.mocked(fg.sync).mockReturnValue(["/home/user/project/.env"]);
+    vi.mocked(fs.accessSync).mockReturnValue(undefined);
+    vi.mocked(fs.statSync).mockReturnValue(fileStatMock);
+
+    const files = resolveFiles(makeFiles(["/home/user/project"], ["/home/user/project/.env"]));
+    expect(files).toHaveLength(1);
+    expect(files[0]).toContain(".env");
+  });
+
+  it("filters out files larger than 10 MB", () => {
+    vi.mocked(fg.sync).mockReturnValue(["/home/user/big-file.bin"]);
+    vi.mocked(fs.accessSync).mockReturnValue(undefined);
+    vi.mocked(fs.statSync).mockReturnValue(largeFileStatMock);
+
+    const files = resolveFiles(makeFiles([], ["/home/user/big-file.bin"]));
+    expect(files).toEqual([]);
+  });
+
+  it("keeps files under 10 MB", () => {
+    vi.mocked(fg.sync).mockReturnValue(["/home/user/.zshrc"]);
+    vi.mocked(fs.accessSync).mockReturnValue(undefined);
+    vi.mocked(fs.statSync).mockReturnValue(fileStatMock);
+
+    const files = resolveFiles(makeFiles([], ["/home/user/.zshrc"]));
+    expect(files).toEqual(["/home/user/.zshrc"]);
   });
 });
