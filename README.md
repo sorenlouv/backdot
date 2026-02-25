@@ -4,7 +4,7 @@
 
 <h1 align="center">backdot</h1>
 
-<p align="center">Back up dotfiles and gitignored files to a private Git repo — on demand or on a daily schedule.</p>
+<p align="center">Automated backup of important files (configs, dotfiles, gitignored files) to your own private Git repo.</p>
 
 ## Getting started
 
