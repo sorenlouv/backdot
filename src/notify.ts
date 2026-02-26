@@ -1,11 +1,15 @@
 import { execSync } from "node:child_process";
 import { logger } from "./log.js";
 
+function escapeAppleScript(str: string): string {
+  return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 export function sendNotification(title: string, message: string): void {
   if (process.platform !== "darwin") return;
 
-  const escaped = message.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const titleEscaped = title.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const escaped = escapeAppleScript(message);
+  const titleEscaped = escapeAppleScript(title);
 
   try {
     execSync(
