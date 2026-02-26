@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    env:
+      GIT_AUTHOR_NAME: ci
+      GIT_AUTHOR_EMAIL: ci@backdot.dev
+      GIT_COMMITTER_NAME: ci
+      GIT_COMMITTER_EMAIL: ci@backdot.dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:e2e
