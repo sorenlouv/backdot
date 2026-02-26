@@ -162,7 +162,7 @@ describe("compareFiles", () => {
 
     const result = await compareFiles(files, MACHINE);
 
-    expect(result.error).toContain("Could not fetch status");
+    expect(result.error).toContain("Backup repository not found");
     expect(result.notBackedUp).toEqual([]);
   });
 
@@ -230,8 +230,7 @@ describe("compareFiles", () => {
     const files = [`${HOME}/.zshrc`];
     const result = await compareFiles(files, MACHINE);
 
-    expect(result.error).toContain("Could not fetch status");
-    expect(result.error).toContain("not a tree object");
+    expect(result.error).toContain("fatal: not a tree object");
   });
 
   it("returns error when revparse fails", async () => {
@@ -242,7 +241,6 @@ describe("compareFiles", () => {
     const files = [`${HOME}/.zshrc`];
     const result = await compareFiles(files, MACHINE);
 
-    expect(result.error).toContain("Could not fetch status");
     expect(result.error).toContain("HEAD not found");
   });
 
@@ -253,7 +251,6 @@ describe("compareFiles", () => {
     const files = [`${HOME}/.zshrc`];
     const result = await compareFiles(files, MACHINE);
 
-    expect(result.error).toContain("Could not fetch status");
     expect(result.error).toContain("Could not resolve host");
   });
 });
