@@ -20,7 +20,9 @@
     "gitignore"
   ],
   "scripts": {
-    "build": "tsc --watch",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "release": "./scripts/release.sh",
     "start": "node dist/cli.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
