@@ -3,6 +3,7 @@ import path from "node:path";
 import { simpleGit, CleanOptions } from "simple-git";
 import { logger } from "./log.js";
 import { STAGING_DIR } from "./staging.js";
+import { getCommitUrl } from "./commitUrl.js";
 
 export async function gitPull(repository: string): Promise<void> {
   if (fs.existsSync(path.join(STAGING_DIR, ".git"))) {
@@ -24,7 +25,7 @@ export async function gitPull(repository: string): Promise<void> {
   logger.info("Synced staging directory from remote");
 }
 
-export async function gitCommitAndPush(): Promise<void> {
+export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } | null> {
   const git = simpleGit(STAGING_DIR);
 
   await git.add(".");
@@ -32,7 +33,7 @@ export async function gitCommitAndPush(): Promise<void> {
   const status = await git.status();
   if (status.isClean()) {
     logger.info("No changes to commit");
-    return;
+    return null;
   }
 
   const date = new Date().toISOString().split("T")[0];
@@ -40,4 +41,9 @@ export async function gitCommitAndPush(): Promise<void> {
   await git.commit(message);
   await git.push(["-u", "origin", "HEAD"]);
   logger.info(`Committed and pushed: ${message}`);
+
+  const sha = await git.revparse(["HEAD"]);
+  const remoteUrl = (await git.remote(["get-url", "origin"])) ?? "";
+  const commitUrl = getCommitUrl(remoteUrl, sha);
+  return { commitUrl };
 }

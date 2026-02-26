@@ -104,12 +104,13 @@ describe("writeRepoReadme", () => {
   });
 
   it("writes README.md to the staging directory root", () => {
-    writeRepoReadme();
+    const repo = "https://github.com/sorenlouv/dotfiles-backup.git";
+    writeRepoReadme(repo);
 
     expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       path.join(STAGING_DIR, "README.md"),
-      expect.stringContaining("https://github.com/sorenlouv/backdot"),
+      expect.stringContaining(`backdot --restore ${repo}`),
     );
   });
 });

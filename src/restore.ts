@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import ora from "ora";
-import { checkbox } from "@inquirer/prompts";
+import { checkbox, select } from "@inquirer/prompts";
 import { loadConfig } from "./config.js";
 import { gitPull } from "./git.js";
 import { STAGING_DIR, machineDir } from "./staging.js";
@@ -32,23 +32,55 @@ function listMachines(): string[] {
     .map((e) => e.name);
 }
 
-export async function restore(): Promise<void> {
+async function resolveRepoAndMachine(repoUrl?: string): Promise<{ repository: string; machine: string }> {
+  if (!repoUrl) {
+    const config = loadConfig();
+    return { repository: config.repository, machine: config.machine };
+  }
+
+  const spinner = ora("Cloning backup repository").start();
+  await gitPull(repoUrl);
+  spinner.stop();
+
+  const machines = listMachines();
+  if (machines.length === 0) {
+    throw new Error("The backup repository is empty (no machine directories found).");
+  }
+
+  let machine: string;
+  if (machines.length === 1) {
+    machine = machines[0];
+  } else {
+    machine = await select({
+      message: "Multiple machines found. Which one do you want to restore?",
+      choices: machines.map((m) => ({ name: m, value: m })),
+    });
+  }
+
+  return { repository: repoUrl, machine };
+}
+
+export async function restore(repoUrl?: string): Promise<void> {
   logger.info("Starting restore");
-  const config = loadConfig();
-  const baseDir = machineDir(config.machine);
+
+  const { repository, machine } = await resolveRepoAndMachine(repoUrl);
 
   const spinner = ora("Fetching latest backup").start();
-  await gitPull(config.repository);
+  const baseDir = machineDir(machine);
+
+  if (!repoUrl) {
+    await gitPull(repository);
+  }
   spinner.text = "Resolving files";
 
   if (!fs.existsSync(baseDir)) {
     spinner.stop();
     const available = listMachines();
     if (available.length > 0) {
-      console.log(`\n  No backup found for machine "${config.machine}".`);
+      console.log(`\n  No backup found for machine "${machine}".`);
       console.log(`  Available machines: ${available.join(", ")}\n`);
     } else {
-      console.log(`\n  No backup found for machine "${config.machine}". The repository is empty.\n`);
+      console.log(`\n  No backup found for machine "${machine}". The repository is empty.\n`);
     }
     return;
   }

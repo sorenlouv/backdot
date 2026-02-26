@@ -52,10 +52,7 @@ export interface ComparisonResult {
   notBackedUp: string[];
 }
 
-export async function compareFiles(
-  files: string[],
-  machine: string,
-): Promise<ComparisonResult> {
+export async function compareFiles(files: string[], machine: string): Promise<ComparisonResult> {
   const result: ComparisonResult = { backedUp: [], modified: [], notBackedUp: [] };
   if (files.length === 0) return result;
 
@@ -78,11 +75,10 @@ export async function compareFiles(
 
   const committedHashes = new Map<string, string>();
   try {
-    const treeOutput = execFileSync(
-      "git",
-      ["ls-tree", "-r", `origin/${branch}`, `${machine}/`],
-      { encoding: "utf-8", cwd: STAGING_DIR },
-    );
+    const treeOutput = execFileSync("git", ["ls-tree", "-r", `origin/${branch}`, `${machine}/`], {
+      encoding: "utf-8",
+      cwd: STAGING_DIR,
+    });
     for (const line of treeOutput.split("\n")) {
       if (!line) continue;
       const match = line.match(/^\d+ blob ([0-9a-f]+)\t(.+)$/);
@@ -123,28 +119,22 @@ export async function compareFiles(
   return result;
 }
 
-const REPO_README = `# Dotfiles Backup
+function repoReadme(repository: string): string {
+  return `# Backdot Backup
 
 This repository contains dotfiles backed up automatically using [backdot](https://github.com/sorenlouv/backdot).
 
-## Quick start
-
-Install backdot:
+## Restore
 
 \`\`\`bash
-npm install -g backdot
-\`\`\`
-
-Restore files from this backup:
-
-\`\`\`bash
-backdot --restore
+npx backdot --restore ${repository}
 \`\`\`
 
 For full documentation, configuration options, and scheduling, see the [official README](https://github.com/sorenlouv/backdot).
 `;
+}
 
-export function writeRepoReadme(): void {
-  fs.writeFileSync(path.join(STAGING_DIR, "README.md"), REPO_README);
+export function writeRepoReadme(repository: string): void {
+  fs.writeFileSync(path.join(STAGING_DIR, "README.md"), repoReadme(repository));
   logger.info("Wrote README.md to staging directory");
 }

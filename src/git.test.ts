@@ -13,6 +13,7 @@ const mockGit = {
   reset: vi.fn().mockResolvedValue(undefined),
   clean: vi.fn().mockResolvedValue(undefined),
   clone: vi.fn().mockResolvedValue(undefined),
+  remote: vi.fn().mockResolvedValue("git@github.com:user/repo.git"),
 };
 
 vi.mock("simple-git", () => ({
@@ -89,24 +90,40 @@ describe("gitCommitAndPush", () => {
     mockGit.add.mockResolvedValue(undefined);
     mockGit.commit.mockResolvedValue(undefined);
     mockGit.push.mockResolvedValue(undefined);
+    mockGit.revparse.mockResolvedValue("abc1234");
+    mockGit.remote.mockResolvedValue("git@github.com:user/repo.git");
   });
 
-  it("skips commit and push when status is clean", async () => {
+  it("returns null when status is clean", async () => {
     mockGit.status.mockResolvedValue({ isClean: () => true });
 
-    await gitCommitAndPush();
+    const result = await gitCommitAndPush();
 
+    expect(result).toBeNull();
     expect(mockGit.add).toHaveBeenCalledWith(".");
     expect(mockGit.commit).not.toHaveBeenCalled();
     expect(mockGit.push).not.toHaveBeenCalled();
   });
 
-  it("commits and pushes when there are changes", async () => {
+  it("commits, pushes, and returns commit URL for known hosts", async () => {
     mockGit.status.mockResolvedValue({ isClean: () => false });
 
-    await gitCommitAndPush();
+    const result = await gitCommitAndPush();
 
     expect(mockGit.commit).toHaveBeenCalledWith(expect.stringContaining("Automated backup:"));
     expect(mockGit.push).toHaveBeenCalledWith(["-u", "origin", "HEAD"]);
+    expect(result).toEqual({
+      commitUrl: "https://github.com/user/repo/commit/abc1234",
+    });
+  });
+
+  it("returns null commitUrl for unknown hosts", async () => {
+    mockGit.status.mockResolvedValue({ isClean: () => false });
+    mockGit.remote.mockResolvedValue("git@selfhosted.example.com:user/repo.git");
+
+    const result = await gitCommitAndPush();
+
+    expect(result).toEqual({ commitUrl: null });
   });
 });
+

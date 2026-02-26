@@ -47,12 +47,15 @@ async function backup(): Promise<void> {
     spinner.text = `Copying ${files.length} file(s) to staging`;
     cleanStaging(config.machine);
     copyToStaging(files, config.machine);
-    writeRepoReadme();
+    writeRepoReadme(config.repository);
 
     spinner.text = "Pushing to remote";
-    await gitCommitAndPush();
+    const result = await gitCommitAndPush();
 
-    spinner.succeed("Backup complete");
+    const successMsg = result?.commitUrl
+      ? `Backup complete → ${result.commitUrl}`
+      : "Backup complete";
+    spinner.succeed(successMsg);
     console.log();
   } catch (err) {
     spinner.fail("Backup failed");
@@ -90,10 +93,7 @@ async function status(): Promise<void> {
     const files = [...userFiles, CONFIG_PATH];
 
     spinner.text = "Comparing with remote backup";
-    const { backedUp, modified, notBackedUp } = await compareFiles(
-      files,
-      config.machine,
-    );
+    const { backedUp, modified, notBackedUp } = await compareFiles(files, config.machine);
     spinner.stop();
 
     if (modified.length === 0 && notBackedUp.length === 0) {
@@ -136,7 +136,9 @@ async function status(): Promise<void> {
 
 function requireMacOS(): void {
   if (process.platform !== "darwin") {
-    throw new Error("Scheduling is only supported on macOS (launchd). Use cron or systemd on Linux.");
+    throw new Error(
+      "Scheduling is only supported on macOS (launchd). Use cron or systemd on Linux.",
+    );
   }
 }
 
@@ -156,7 +158,7 @@ async function main(): Promise<void> {
     } else if (command === "--status") {
       await status();
     } else if (command === "--restore") {
-      await restore();
+      await restore(args[1]);
     } else if (command === "--version") {
       console.log(getVersion());
     } else {
@@ -166,7 +168,7 @@ async function main(): Promise<void> {
       console.log("  Commands:");
       console.log();
       console.log("    --backup       Run a backup now");
-      console.log("    --restore      Restore files from the backup repo");
+      console.log("    --restore [url] Restore files from the backup repo");
       console.log("    --schedule     Install daily backup schedule (macOS launchd)");
       console.log("    --unschedule   Remove the daily backup schedule");
       console.log("    --status       Show schedule and resolved files");
