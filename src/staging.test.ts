@@ -156,15 +156,14 @@ describe("compareFiles", () => {
     vi.resetAllMocks();
   });
 
-  it("returns all files as notBackedUp when no git repo exists", async () => {
+  it("returns error when no git repo exists", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
 
     const result = await compareFiles(files, MACHINE);
 
-    expect(result.notBackedUp).toEqual(files);
-    expect(result.backedUp).toEqual([]);
-    expect(result.modified).toEqual([]);
+    expect(result.error).toContain("Could not fetch status");
+    expect(result.notBackedUp).toEqual([]);
   });
 
   it("returns empty result for empty file list", async () => {
@@ -219,7 +218,7 @@ describe("compareFiles", () => {
     expect(result.modified).toEqual([]);
   });
 
-  it("returns all files as notBackedUp when ls-tree fails", async () => {
+  it("returns error when ls-tree fails", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.fetch.mockResolvedValue(undefined);
     mockGit.revparse.mockResolvedValue("main");
@@ -231,10 +230,11 @@ describe("compareFiles", () => {
     const files = [`${HOME}/.zshrc`];
     const result = await compareFiles(files, MACHINE);
 
-    expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
+    expect(result.error).toContain("Could not fetch status");
+    expect(result.error).toContain("not a tree object");
   });
 
-  it("returns all files as notBackedUp when revparse fails", async () => {
+  it("returns error when revparse fails", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.fetch.mockResolvedValue(undefined);
     mockGit.revparse.mockRejectedValue(new Error("HEAD not found"));
@@ -242,6 +242,18 @@ describe("compareFiles", () => {
     const files = [`${HOME}/.zshrc`];
     const result = await compareFiles(files, MACHINE);
 
-    expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
+    expect(result.error).toContain("Could not fetch status");
+    expect(result.error).toContain("HEAD not found");
+  });
+
+  it("returns error when fetch fails", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockGit.fetch.mockRejectedValue(new Error("Could not resolve host"));
+
+    const files = [`${HOME}/.zshrc`];
+    const result = await compareFiles(files, MACHINE);
+
+    expect(result.error).toContain("Could not fetch status");
+    expect(result.error).toContain("Could not resolve host");
   });
 });

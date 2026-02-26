@@ -89,6 +89,7 @@ describe("resolveFiles", () => {
     expect(fg.sync).toHaveBeenCalledWith(["/home/user/**", "!/home/user/tmp/**"], {
       absolute: true,
       dot: true,
+      onlyFiles: true,
     });
   });
 

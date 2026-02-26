@@ -47,13 +47,18 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } |
       logger.info(`Push failed (attempt ${attemptNumber}, ${retriesLeft} retries left), rebasing`);
       await git.fetch("origin");
       const branch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
-      await git.rebase([`origin/${branch}`]);
+      try {
+        await git.rebase([`origin/${branch}`]);
+      } catch {
+        await git.rebase(["--abort"]);
+        throw new Error("Rebase conflict, aborting retry");
+      }
     },
   });
 
   logger.info(`Committed and pushed: ${message}`);
 
-  const sha = await git.revparse(["HEAD"]);
+  const sha = (await git.revparse(["HEAD"])).trim();
   const remoteUrl = (await git.remote(["get-url", "origin"])) ?? "";
   const commitUrl = getCommitUrl(remoteUrl, sha);
   return { commitUrl };

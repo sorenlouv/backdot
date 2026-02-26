@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 vi.mock("node:fs", () => ({
@@ -18,7 +18,7 @@ vi.mock("./log.js", () => ({
 }));
 
 import fs from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { isScheduled } from "./plist.js";
 
 describe("isScheduled", () => {
@@ -33,13 +33,13 @@ describe("isScheduled", () => {
 
   it("returns true when launchctl lists the job", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(execSync).mockReturnValue('"com.backdot.daemon" = { ... }');
+    vi.mocked(execFileSync).mockReturnValue('"com.backdot.daemon" = { ... }');
     expect(isScheduled()).toBe(true);
   });
 
   it("returns false when launchctl throws (job not loaded)", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(execSync).mockImplementation(() => {
+    vi.mocked(execFileSync).mockImplementation(() => {
       throw new Error("Could not find service");
     });
     expect(isScheduled()).toBe(false);

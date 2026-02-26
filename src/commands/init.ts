@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import chalk from "chalk";
-import { CONFIG_PATH } from "./config.js";
+import { CONFIG_PATH } from "../config.js";
 
 const TEMPLATE = {
   repository: "git@github.com:USERNAME/backdot-backup.git",

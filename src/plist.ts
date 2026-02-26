@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -55,7 +55,7 @@ export function isScheduled(): boolean {
     return false;
   }
   try {
-    const output = execSync(`launchctl list ${LABEL}`, { encoding: "utf-8", stdio: "pipe" });
+    const output = execFileSync("launchctl", ["list", LABEL], { encoding: "utf-8", stdio: "pipe" });
     return output.includes(LABEL);
   } catch {
     return false;
@@ -72,7 +72,7 @@ export function setupLaunchd(): void {
   }
 
   try {
-    execSync(`launchctl unload ${PLIST_PATH}`, { stdio: "pipe" });
+    execFileSync("launchctl", ["unload", PLIST_PATH], { stdio: "pipe" });
   } catch {
     // Not loaded, that's fine
   }
@@ -81,7 +81,7 @@ export function setupLaunchd(): void {
   logger.info(`Plist written to ${PLIST_PATH}`);
 
   try {
-    execSync(`launchctl load ${PLIST_PATH}`);
+    execFileSync("launchctl", ["load", PLIST_PATH], { stdio: "pipe" });
     spinner.succeed("Daily backup scheduled (02:00)");
     console.log();
     logger.info("Launchd job loaded");
@@ -90,7 +90,7 @@ export function setupLaunchd(): void {
     spinner.fail(`Failed to load launchd job: ${msg}`);
     console.log();
     logger.error(`Failed to load launchd job: ${msg}`);
-    process.exit(1);
+    throw new Error(`Failed to load launchd job: ${msg}`, { cause: err });
   }
 }
 
@@ -98,7 +98,7 @@ export function uninstallLaunchd(): void {
   const spinner = ora("Removing schedule").start();
 
   try {
-    execSync(`launchctl unload ${PLIST_PATH}`, { stdio: "pipe" });
+    execFileSync("launchctl", ["unload", PLIST_PATH], { stdio: "pipe" });
     logger.info("Launchd job unloaded");
   } catch {
     logger.info("Launchd job was not loaded");

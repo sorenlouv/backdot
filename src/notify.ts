@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { logger } from "./log.js";
 
 function escapeAppleScript(str: string): string {
@@ -12,8 +12,12 @@ export function sendNotification(title: string, message: string): void {
   const titleEscaped = escapeAppleScript(title);
 
   try {
-    execSync(
-      `osascript -e 'display notification "${escaped}" with title "${titleEscaped}" subtitle "Scheduled backup failed"'`,
+    execFileSync(
+      "osascript",
+      [
+        "-e",
+        `display notification "${escaped}" with title "${titleEscaped}" subtitle "Scheduled backup failed"`,
+      ],
       { stdio: "pipe" },
     );
   } catch (err) {

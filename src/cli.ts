@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import chalk from "chalk";
-import ora from "ora";
-import { loadConfig, CONFIG_PATH } from "./config.js";
-import { resolveFiles } from "./resolve.js";
-import { cleanStaging, copyToStaging, writeRepoReadme, compareFiles } from "./staging.js";
-import { gitPull, gitCommitAndPush } from "./git.js";
-import { restore } from "./restore.js";
-import { init } from "./init.js";
-import { setupLaunchd, uninstallLaunchd, isScheduled } from "./plist.js";
+import { CONFIG_PATH } from "./config.js";
+import { backup } from "./commands/backup.js";
+import { status } from "./commands/status.js";
+import { schedule, unschedule } from "./commands/schedule.js";
+import { restore } from "./commands/restore.js";
+import { init } from "./commands/init.js";
 import { logger } from "./log.js";
 import { sendNotification } from "./notify.js";
 
@@ -25,125 +22,6 @@ function getVersion(): string {
   }
 }
 
-async function backup(): Promise<void> {
-  logger.info("Starting backup");
-  const config = loadConfig();
-  logger.info(`Repository: ${config.repository}`);
-  logger.info(`Machine: ${config.machine}`);
-
-  const spinner = ora("Resolving files").start();
-  try {
-    const userFiles = resolveFiles(config);
-    logger.info(`Resolved ${userFiles.length} file(s)`);
-
-    if (userFiles.length === 0) {
-      spinner.info("No files resolved, nothing to back up");
-      return;
-    }
-
-    const files = [...userFiles, CONFIG_PATH];
-
-    spinner.text = "Syncing with remote";
-    await gitPull(config.repository);
-
-    spinner.text = `Copying ${files.length} file(s) to staging`;
-    cleanStaging(config.machine);
-    copyToStaging(files, config.machine);
-    writeRepoReadme(config.repository);
-
-    spinner.text = "Pushing to remote";
-    const result = await gitCommitAndPush();
-
-    const successMsg = result?.commitUrl
-      ? `Backup complete → ${result.commitUrl}`
-      : "Backup complete";
-    spinner.succeed(successMsg);
-    console.log();
-  } catch (err) {
-    spinner.fail("Backup failed");
-    throw err;
-  }
-
-  logger.info("Backup complete");
-}
-
-function tildePath(filePath: string): string {
-  const home = os.homedir();
-  return filePath.startsWith(home) ? "~" + filePath.slice(home.length) : filePath;
-}
-
-async function status(): Promise<void> {
-  const scheduled = isScheduled();
-  console.log();
-  console.log(`  Schedule:  ${scheduled ? "active (daily at 02:00)" : "not active"}`);
-
-  try {
-    const config = loadConfig();
-    console.log(`  Repo:      ${config.repository}`);
-    console.log(`  Machine:   ${config.machine}`);
-    console.log();
-
-    const spinner = ora("Resolving files").start();
-    const userFiles = resolveFiles(config);
-
-    if (userFiles.length === 0) {
-      spinner.warn("No files resolved. Check your ~/.backdot.json entries.");
-      console.log();
-      return;
-    }
-
-    const files = [...userFiles, CONFIG_PATH];
-
-    spinner.text = "Comparing with remote backup";
-    const { backedUp, modified, notBackedUp } = await compareFiles(files, config.machine);
-    spinner.stop();
-
-    if (modified.length === 0 && notBackedUp.length === 0) {
-      console.log(chalk.green(`  All ${files.length} file(s) are backed up ✓`));
-    } else {
-      if (modified.length > 0) {
-        console.log(chalk.yellow(`  Modified since last backup (${modified.length}):`));
-        for (const f of modified) {
-          console.log(`        ${tildePath(f)}`);
-        }
-        console.log();
-      }
-
-      if (notBackedUp.length > 0) {
-        console.log(chalk.red(`  Not yet backed up (${notBackedUp.length}):`));
-        for (const f of notBackedUp) {
-          console.log(`        ${tildePath(f)}`);
-        }
-        console.log();
-      }
-
-      if (backedUp.length > 0) {
-        console.log(chalk.green(`  Backed up (${backedUp.length}):`));
-        for (const f of backedUp) {
-          console.log(`        ${tildePath(f)}`);
-        }
-        console.log();
-      }
-
-      console.log(`  Run ${chalk.bold("backdot --backup")} to back up all changes.`);
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`\n  Config error: ${msg}`);
-    process.exit(1);
-  }
-
-  console.log();
-}
-
-function requireMacOS(): void {
-  if (process.platform !== "darwin") {
-    throw new Error(
-      "Scheduling is only supported on macOS (launchd). Use cron or systemd on Linux.",
-    );
-  }
-}
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -154,15 +32,17 @@ async function main(): Promise<void> {
     } else if (command === "--backup") {
       await backup();
     } else if (command === "--schedule") {
-      requireMacOS();
-      setupLaunchd();
+      schedule();
     } else if (command === "--unschedule") {
-      requireMacOS();
-      uninstallLaunchd();
+      unschedule();
     } else if (command === "--status") {
       await status();
     } else if (command === "--restore") {
-      await restore(args[1]);
+      const url = args[1];
+      if (url?.startsWith("--")) {
+        throw new Error(`Invalid repository URL: "${url}". Did you mean to pass a Git URL?`);
+      }
+      await restore(url);
     } else if (command === "--version") {
       console.log(getVersion());
     } else {

@@ -6,7 +6,7 @@ import { logger } from "./log.js";
 function resolveGlobs(patterns: string[]): string[] {
   if (patterns.length === 0) return [];
   try {
-    return fg.sync(patterns, { absolute: true, dot: true });
+    return fg.sync(patterns, { absolute: true, dot: true, onlyFiles: true });
   } catch {
     logger.warn("Glob pattern resolution failed");
     return [];

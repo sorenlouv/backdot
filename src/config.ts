@@ -15,17 +15,13 @@ export function expandTilde(p: string): string {
   return p;
 }
 
-const pathList = z.array(z.string().min(1).transform(expandTilde)).optional().default([]);
-
-const ConfigSchema = z
-  .object({
-    repository: z.string().min(1),
-    machine: z.string().min(1),
-    paths: pathList,
-  })
-  .refine((c) => c.paths.length > 0, {
-    message: '"paths" must be a non-empty array',
-  });
+const ConfigSchema = z.object({
+  repository: z.string().min(1),
+  machine: z.string().min(1),
+  paths: z
+    .array(z.string().min(1).transform(expandTilde))
+    .min(1, '"paths" must be a non-empty array'),
+});
 
 export type Config = z.infer<typeof ConfigSchema>;
 

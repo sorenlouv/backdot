@@ -50,28 +50,37 @@ export interface ComparisonResult {
   backedUp: string[];
   modified: string[];
   notBackedUp: string[];
+  error?: string;
 }
 
-const allNotBackedUp = (files: string[]): ComparisonResult => ({
-  backedUp: [],
-  modified: [],
-  notBackedUp: files,
-});
+function failedComparisonResult(err: unknown): ComparisonResult {
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  return { backedUp: [], modified: [], notBackedUp: [], error: errorMessage };
+}
 
 export async function compareFiles(files: string[], machine: string): Promise<ComparisonResult> {
   if (files.length === 0) return { backedUp: [], modified: [], notBackedUp: [] };
 
   const gitDir = path.join(STAGING_DIR, ".git");
-  if (!fs.existsSync(gitDir)) return allNotBackedUp(files);
+  if (!fs.existsSync(gitDir)) {
+    return failedComparisonResult(
+      new Error("Backup repository not found. Run backdot --backup first."),
+    );
+  }
 
   const git = simpleGit(STAGING_DIR);
-  await git.fetch("origin");
+
+  try {
+    await git.fetch("origin");
+  } catch (err) {
+    return failedComparisonResult(err);
+  }
 
   let branch: string;
   try {
     branch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
-  } catch {
-    return allNotBackedUp(files);
+  } catch (err) {
+    return failedComparisonResult(err);
   }
 
   let committedHashes: Map<string, string>;
@@ -87,8 +96,8 @@ export async function compareFiles(files: string[], machine: string): Promise<Co
         .filter((m): m is RegExpMatchArray => m !== null)
         .map((m) => [m[2], m[1]] as const),
     );
-  } catch {
-    return allNotBackedUp(files);
+  } catch (err) {
+    return failedComparisonResult(err);
   }
 
   let sourceHashes: string[];
@@ -97,8 +106,8 @@ export async function compareFiles(files: string[], machine: string): Promise<Co
       encoding: "utf-8",
     });
     sourceHashes = hashOutput.trim().split("\n");
-  } catch {
-    return allNotBackedUp(files);
+  } catch (err) {
+    return failedComparisonResult(err);
   }
 
   return files.reduce<ComparisonResult>(

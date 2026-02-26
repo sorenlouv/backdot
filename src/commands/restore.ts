@@ -3,10 +3,10 @@ import path from "node:path";
 import os from "node:os";
 import ora from "ora";
 import { checkbox, select } from "@inquirer/prompts";
-import { loadConfig } from "./config.js";
-import { gitPull } from "./git.js";
-import { STAGING_DIR, machineDir } from "./staging.js";
-import { logger } from "./log.js";
+import { loadConfig } from "../config.js";
+import { gitPull } from "../git.js";
+import { STAGING_DIR, machineDir } from "../staging.js";
+import { logger } from "../log.js";
 
 const HOME = os.homedir();
 
