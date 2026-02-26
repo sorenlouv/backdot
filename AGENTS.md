@@ -18,3 +18,11 @@ Every feature must be **fast**, **simple**, and **beautiful**. This tool solves 
 
 - The backup repo is cloned to `~/.backdot/repo`. Git sync uses fetch + hard reset (not merge) to avoid conflicts.
 - `compareFiles` (used by `--status`) compares git object hashes from the remote tree against hashes of local source files — no local checkout needed.
+
+## Manual testing
+
+Override `HOME` to a temp directory to test any command without touching your real config or backup repo:
+
+```bash
+HOME=$(mktemp -d) node dist/cli.js --init
+```

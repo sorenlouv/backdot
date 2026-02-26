@@ -10,13 +10,14 @@
 
 ```bash
 npm install -g backdot
+backdot --init
 ```
 
-Create `~/.backdot.json` pointing to a private repo and the files you want backed up:
+This creates `~/.backdot.json` with sensible defaults and walks you through setup. Open the config file and set your repository URL and the files you want backed up:
 
 ```json
 {
-  "repository": "git@github.com:USERNAME/dotfiles-backup.git",
+  "repository": "git@github.com:USERNAME/backdot-backup.git",
   "machine": "my-work-laptop",
   "files.gitignored": ["~/my-project"],
   "files.match": ["~/.zshrc", "~/.oh-my-zsh/custom/*.zsh", "~/.ssh/config/config", "~/.npmrc"]
@@ -40,6 +41,7 @@ backdot --backup
 
 | Command        | Description                                            |
 | -------------- | ------------------------------------------------------ |
+| `--init`       | Set up backdot for the first time                      |
 | `--backup`     | Run a backup now                                       |
 | `--restore`    | Restore files to their original locations              |
 | `--schedule`   | Schedule automatic daily backup via launchd (Mac-only) |

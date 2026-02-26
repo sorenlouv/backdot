@@ -19,6 +19,45 @@ function run(args: string[], env: NodeJS.ProcessEnv): string {
   return combined;
 }
 
+describe("backdot --init", () => {
+  let initDir: string;
+  let initEnv: NodeJS.ProcessEnv;
+
+  beforeAll(() => {
+    initDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-init-"));
+    initEnv = { ...process.env, HOME: initDir };
+  });
+
+  afterAll(() => {
+    fs.rmSync(initDir, { recursive: true, force: true });
+  });
+
+  it("creates ~/.backdot.json with defaults", () => {
+    const output = run(["--init"], initEnv);
+    expect(output).toContain("Welcome to backdot");
+    expect(output).toContain("Created ~/.backdot.json");
+
+    const configPath = path.join(initDir, ".backdot.json");
+    expect(fs.existsSync(configPath)).toBe(true);
+
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    expect(config.repository).toBe("git@github.com:USERNAME/backdot-backup.git");
+    expect(config.machine).toBe(os.hostname());
+    expect(config["files.match"]).toEqual(["~/.zshrc", "~/.gitconfig"]);
+  });
+
+  it("does not overwrite existing config on second run", () => {
+    const configPath = path.join(initDir, ".backdot.json");
+    const before = fs.readFileSync(configPath, "utf-8");
+
+    const output = run(["--init"], initEnv);
+    expect(output).toContain("already exists");
+
+    const after = fs.readFileSync(configPath, "utf-8");
+    expect(after).toBe(before);
+  });
+});
+
 describe("backdot e2e", () => {
   let tempDir: string;
   let remoteRepo: string;

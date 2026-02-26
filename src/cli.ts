@@ -10,6 +10,7 @@ import { resolveFiles } from "./resolve.js";
 import { cleanStaging, copyToStaging, writeRepoReadme, compareFiles } from "./staging.js";
 import { gitPull, gitCommitAndPush } from "./git.js";
 import { restore } from "./restore.js";
+import { init } from "./init.js";
 import { setupLaunchd, uninstallLaunchd, isScheduled } from "./plist.js";
 import { logger } from "./log.js";
 
@@ -147,7 +148,9 @@ async function main(): Promise<void> {
   const command = args[0];
 
   try {
-    if (command === "--backup") {
+    if (command === "--init") {
+      init();
+    } else if (command === "--backup") {
       await backup();
     } else if (command === "--schedule") {
       requireMacOS();
@@ -167,6 +170,7 @@ async function main(): Promise<void> {
       console.log();
       console.log("  Commands:");
       console.log();
+      console.log("    --init         Set up backdot for the first time");
       console.log("    --backup       Run a backup now");
       console.log("    --restore [url] Restore files from the backup repo");
       console.log("    --schedule     Install daily backup schedule (macOS launchd)");
@@ -178,6 +182,9 @@ async function main(): Promise<void> {
         console.error(`  Unknown command: ${command}`);
         console.log();
         process.exit(1);
+      } else if (!fs.existsSync(CONFIG_PATH)) {
+        console.log(`  No config found. Run ${chalk.bold("backdot --init")} to get started.`);
+        console.log();
       }
     }
   } catch (err) {
