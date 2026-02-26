@@ -11,17 +11,13 @@ import { logger } from "./log.js";
 const HOME = os.homedir();
 
 function walkDir(dir: string): string[] {
-  const results: string[] = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === ".git") continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...walkDir(full));
-    } else {
-      results.push(full);
-    }
-  }
-  return results;
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.name !== ".git")
+    .flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      return entry.isDirectory() ? walkDir(full) : [full];
+    });
 }
 
 function listMachines(): string[] {

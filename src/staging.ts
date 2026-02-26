@@ -52,15 +52,17 @@ export interface ComparisonResult {
   notBackedUp: string[];
 }
 
+const allNotBackedUp = (files: string[]): ComparisonResult => ({
+  backedUp: [],
+  modified: [],
+  notBackedUp: files,
+});
+
 export async function compareFiles(files: string[], machine: string): Promise<ComparisonResult> {
-  const result: ComparisonResult = { backedUp: [], modified: [], notBackedUp: [] };
-  if (files.length === 0) return result;
+  if (files.length === 0) return { backedUp: [], modified: [], notBackedUp: [] };
 
   const gitDir = path.join(STAGING_DIR, ".git");
-  if (!fs.existsSync(gitDir)) {
-    result.notBackedUp.push(...files);
-    return result;
-  }
+  if (!fs.existsSync(gitDir)) return allNotBackedUp(files);
 
   const git = simpleGit(STAGING_DIR);
   await git.fetch("origin");
@@ -69,26 +71,24 @@ export async function compareFiles(files: string[], machine: string): Promise<Co
   try {
     branch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
   } catch {
-    result.notBackedUp.push(...files);
-    return result;
+    return allNotBackedUp(files);
   }
 
-  const committedHashes = new Map<string, string>();
+  let committedHashes: Map<string, string>;
   try {
     const treeOutput = execFileSync("git", ["ls-tree", "-r", `origin/${branch}`, `${machine}/`], {
       encoding: "utf-8",
       cwd: STAGING_DIR,
     });
-    for (const line of treeOutput.split("\n")) {
-      if (!line) continue;
-      const match = line.match(/^\d+ blob ([0-9a-f]+)\t(.+)$/);
-      if (match) {
-        committedHashes.set(match[2], match[1]);
-      }
-    }
+    committedHashes = new Map(
+      treeOutput
+        .split("\n")
+        .map((line) => line.match(/^\d+ blob ([0-9a-f]+)\t(.+)$/))
+        .filter((m): m is RegExpMatchArray => m !== null)
+        .map((m) => [m[2], m[1]] as const),
+    );
   } catch {
-    result.notBackedUp.push(...files);
-    return result;
+    return allNotBackedUp(files);
   }
 
   let sourceHashes: string[];
@@ -98,25 +98,26 @@ export async function compareFiles(files: string[], machine: string): Promise<Co
     });
     sourceHashes = hashOutput.trim().split("\n");
   } catch {
-    result.notBackedUp.push(...files);
-    return result;
+    return allNotBackedUp(files);
   }
 
-  for (let i = 0; i < files.length; i++) {
-    const repoRelPath = path.relative(STAGING_DIR, getStagedPath(files[i], machine));
-    const committedHash = committedHashes.get(repoRelPath);
-    const sourceHash = sourceHashes[i];
+  return files.reduce<ComparisonResult>(
+    (acc, file, i) => {
+      const repoRelPath = path.relative(STAGING_DIR, getStagedPath(file, machine));
+      const committedHash = committedHashes.get(repoRelPath);
 
-    if (!committedHash) {
-      result.notBackedUp.push(files[i]);
-    } else if (committedHash === sourceHash) {
-      result.backedUp.push(files[i]);
-    } else {
-      result.modified.push(files[i]);
-    }
-  }
+      if (!committedHash) {
+        acc.notBackedUp.push(file);
+      } else if (committedHash === sourceHashes[i]) {
+        acc.backedUp.push(file);
+      } else {
+        acc.modified.push(file);
+      }
 
-  return result;
+      return acc;
+    },
+    { backedUp: [], modified: [], notBackedUp: [] },
+  );
 }
 
 function repoReadme(repository: string): string {
