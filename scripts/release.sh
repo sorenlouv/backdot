@@ -3,6 +3,9 @@ set -euo pipefail
 
 # ── Prerequisites ────────────────────────────────────────────────────────────
 
+echo "Verifying npm auth…"
+npm login
+
 if ! command -v gh &>/dev/null; then
   echo "Error: GitHub CLI (gh) is not installed."
   echo "Install it with:  brew install gh"
