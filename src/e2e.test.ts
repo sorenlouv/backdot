@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { spawnSync, execSync, spawn } from "node:child_process";
+import { spawnSync, execSync, execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 const CLI_PATH = path.resolve(import.meta.dirname, "../dist/cli.js");
 
@@ -19,25 +22,12 @@ function run(args: string[], env: NodeJS.ProcessEnv): string {
   return combined;
 }
 
-function runAsync(args: string[], env: NodeJS.ProcessEnv): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("node", [CLI_PATH, ...args], {
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d: Buffer) => { stdout += d; });
-    child.stderr.on("data", (d: Buffer) => { stderr += d; });
-    child.on("close", (code) => {
-      const combined = stdout + stderr;
-      if (code !== 0) {
-        reject(new Error(`CLI exited with code ${code}:\n${combined}`));
-      } else {
-        resolve(combined);
-      }
-    });
+async function runAsync(args: string[], env: NodeJS.ProcessEnv): Promise<string> {
+  const { stdout, stderr } = await execFileAsync("node", [CLI_PATH, ...args], {
+    env,
+    timeout: 30_000,
   });
+  return (stdout ?? "") + (stderr ?? "");
 }
 
 describe("backdot --init", () => {
