@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { spawnSync, execSync } from "node:child_process";
+import { spawnSync, execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,6 +17,27 @@ function run(args: string[], env: NodeJS.ProcessEnv): string {
     throw new Error(`CLI exited with code ${result.status}:\n${combined}`);
   }
   return combined;
+}
+
+function runAsync(args: string[], env: NodeJS.ProcessEnv): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("node", [CLI_PATH, ...args], {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d: Buffer) => { stdout += d; });
+    child.stderr.on("data", (d: Buffer) => { stderr += d; });
+    child.on("close", (code) => {
+      const combined = stdout + stderr;
+      if (code !== 0) {
+        reject(new Error(`CLI exited with code ${code}:\n${combined}`));
+      } else {
+        resolve(combined);
+      }
+    });
+  });
 }
 
 describe("backdot --init", () => {
@@ -167,4 +188,84 @@ describe("backdot e2e", () => {
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(MODIFIED_ZSHRC);
     expect(fs.readFileSync(path.join(tempDir, ".config", "test", "settings.json"), "utf-8")).toBe(SETTINGS_CONTENT);
   });
+});
+
+describe("concurrent multi-machine backup", () => {
+  let tempDir: string;
+  let remoteRepo: string;
+
+  const machines = [
+    { name: "laptop", file: ".zshrc", content: "# laptop zshrc\n" },
+    { name: "desktop", file: ".zshrc", content: "# desktop zshrc\n" },
+    { name: "server", file: ".bashrc", content: "# server bashrc\n" },
+  ];
+
+  function envForMachine(name: string): NodeJS.ProcessEnv {
+    return {
+      ...process.env,
+      HOME: path.join(tempDir, name),
+      GIT_AUTHOR_NAME: "backdot-test",
+      GIT_AUTHOR_EMAIL: "test@backdot.dev",
+      GIT_COMMITTER_NAME: "backdot-test",
+      GIT_COMMITTER_EMAIL: "test@backdot.dev",
+    };
+  }
+
+  beforeAll(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-concurrent-"));
+
+    remoteRepo = path.join(tempDir, "remote.git");
+    execSync(`git init --bare -b main "${remoteRepo}"`, { stdio: "ignore" });
+
+    for (const m of machines) {
+      const homeDir = path.join(tempDir, m.name);
+      fs.mkdirSync(homeDir, { recursive: true });
+      fs.writeFileSync(path.join(homeDir, m.file), m.content);
+      fs.writeFileSync(
+        path.join(homeDir, ".backdot.json"),
+        JSON.stringify(
+          { repository: remoteRepo, machine: m.name, paths: [`~/${m.file}`] },
+          null,
+          2,
+        ),
+      );
+    }
+
+    // Seed the repo sequentially so all machines exist on the remote
+    for (const m of machines) {
+      run(["--backup"], envForMachine(m.name));
+    }
+  });
+
+  afterAll(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("all machines succeed when backing up concurrently", async () => {
+    // Modify every machine's file so each has something new to push
+    for (const m of machines) {
+      const homeDir = path.join(tempDir, m.name);
+      fs.writeFileSync(path.join(homeDir, m.file), `${m.content}# updated\n`);
+    }
+
+    const results = await Promise.all(
+      machines.map((m) => runAsync(["--backup"], envForMachine(m.name))),
+    );
+
+    for (const output of results) {
+      expect(output).toContain("Backup complete");
+    }
+
+    // Clone the remote and verify every machine's updated file is present
+    const verifyDir = path.join(tempDir, "verify-clone");
+    execSync(`git clone "${remoteRepo}" "${verifyDir}"`, { stdio: "ignore" });
+
+    for (const m of machines) {
+      const filePath = path.join(verifyDir, m.name, m.file);
+      expect(fs.existsSync(filePath)).toBe(true);
+      expect(fs.readFileSync(filePath, "utf-8")).toBe(`${m.content}# updated\n`);
+    }
+
+    fs.rmSync(verifyDir, { recursive: true, force: true });
+  }, 60_000);
 });

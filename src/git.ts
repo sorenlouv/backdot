@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import pRetry from "p-retry";
 import { simpleGit, CleanOptions } from "simple-git";
 import { logger } from "./log.js";
 import { STAGING_DIR } from "./staging.js";
@@ -39,7 +40,19 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } |
   const date = new Date().toISOString().split("T")[0];
   const message = `Automated backup: ${date}`;
   await git.commit(message);
-  await git.push(["-u", "origin", "HEAD"]);
+
+  await pRetry(async () => git.push(["-u", "origin", "HEAD"]), {
+    retries: 5,
+    onFailedAttempt: async ({ attemptNumber, retriesLeft }) => {
+      logger.info(
+        `Push failed (attempt ${attemptNumber}, ${retriesLeft} retries left), rebasing`,
+      );
+      await git.fetch("origin");
+      const branch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
+      await git.rebase([`origin/${branch}`]);
+    },
+  });
+
   logger.info(`Committed and pushed: ${message}`);
 
   const sha = await git.revparse(["HEAD"]);
