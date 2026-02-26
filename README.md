@@ -30,6 +30,12 @@ Run your first backup:
 backdot --backup
 ```
 
+or configure the backport process to run automatically (daily at 2am)
+
+```bash
+backdot --schedule
+```
+
 ## Configuration
 
 | Key          | Description                                            |
