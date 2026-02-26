@@ -6,7 +6,6 @@ import { CONFIG_PATH } from "./config.js";
 const TEMPLATE = {
   repository: "git@github.com:USERNAME/backdot-backup.git",
   machine: os.hostname(),
-  gitignored: [],
   paths: ["~/.zshrc", "~/.gitconfig"],
 };
 

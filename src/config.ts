@@ -18,11 +18,10 @@ const ConfigSchema = z
   .object({
     repository: z.string().min(1),
     machine: z.string().min(1),
-    gitignored: pathList,
     paths: pathList,
   })
-  .refine((c) => c.gitignored.length > 0 || c.paths.length > 0, {
-    message: 'At least one of "gitignored" or "paths" must be a non-empty array',
+  .refine((c) => c.paths.length > 0, {
+    message: '"paths" must be a non-empty array',
   });
 
 export type Config = z.infer<typeof ConfigSchema>;

@@ -4,7 +4,7 @@
 
 <h1 align="center">backdot</h1>
 
-<p align="center">Automated backup of important files (configs, dotfiles, gitignored files) to your own private Git repo.</p>
+<p align="center">Automated backup of important files (configs, dotfiles) to your own private Git repo.</p>
 
 ## Getting started
 
@@ -19,7 +19,6 @@ This creates `~/.backdot.json` with sensible defaults and walks you through setu
 {
   "repository": "git@github.com:USERNAME/backdot-backup.git",
   "machine": "my-work-laptop",
-  "gitignored": ["~/my-project"],
   "paths": ["~/.zshrc", "~/.oh-my-zsh/custom/*.zsh", "~/.ssh/config", "~/.npmrc"]
 }
 ```
@@ -38,10 +37,9 @@ backdot --schedule
 
 ## Configuration
 
-| Key          | Description                                            |
-| ------------ | ------------------------------------------------------ |
-| `gitignored` | Directories to scan for gitignored files               |
-| `paths`      | Glob patterns matching individual files or directories |
+| Key     | Description                                            |
+| ------- | ------------------------------------------------------ |
+| `paths` | Glob patterns matching individual files or directories |
 
 ## Commands
 
