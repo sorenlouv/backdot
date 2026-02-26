@@ -33,6 +33,18 @@ describe("expandTilde", () => {
   it("does not expand ~ in the middle of a path", () => {
     expect(expandTilde("/home/~user")).toBe("/home/~user");
   });
+
+  it("expands ~/ inside negation pattern", () => {
+    expect(expandTilde("!~/foo")).toBe(`!${HOME}/foo`);
+  });
+
+  it("expands bare ~ inside negation pattern", () => {
+    expect(expandTilde("!~")).toBe(`!${HOME}`);
+  });
+
+  it("leaves negated absolute paths unchanged", () => {
+    expect(expandTilde("!/usr/local/bin")).toBe("!/usr/local/bin");
+  });
 });
 
 describe("loadConfig", () => {
@@ -155,5 +167,22 @@ describe("loadConfig", () => {
     expect(config.repository).toBe("git@github.com:test/repo.git");
     expect(config.machine).toBe("my-laptop");
     expect(config.paths).toEqual([`${HOME}/.zshrc`, `${HOME}/.config/ghostty/**`]);
+  });
+
+  it("expands tildes in negation patterns", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({
+        repository: "git@github.com:test/repo.git",
+        machine: "my-laptop",
+        paths: ["~/.config/ghostty/**", "!~/.config/ghostty/crashes/**"],
+      }),
+    );
+
+    const config = loadConfig();
+    expect(config.paths).toEqual([
+      `${HOME}/.config/ghostty/**`,
+      `!${HOME}/.config/ghostty/crashes/**`,
+    ]);
   });
 });

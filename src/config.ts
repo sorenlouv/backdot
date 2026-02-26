@@ -6,6 +6,9 @@ import { z } from "zod";
 export const CONFIG_PATH = path.join(os.homedir(), ".backdot.json");
 
 export function expandTilde(p: string): string {
+  if (p.startsWith("!")) {
+    return "!" + expandTilde(p.slice(1));
+  }
   if (p.startsWith("~/") || p === "~") {
     return path.join(os.homedir(), p.slice(1));
   }

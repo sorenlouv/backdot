@@ -30,6 +30,21 @@ async function runAsync(args: string[], env: NodeJS.ProcessEnv): Promise<string>
   return (stdout ?? "") + (stderr ?? "");
 }
 
+function cloneRemote(repo: string, dest: string): void {
+  execSync(`git clone "${repo}" "${dest}"`, { stdio: "ignore" });
+}
+
+function testEnv(homeDir: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    HOME: homeDir,
+    GIT_AUTHOR_NAME: "backdot-test",
+    GIT_AUTHOR_EMAIL: "test@backdot.dev",
+    GIT_COMMITTER_NAME: "backdot-test",
+    GIT_COMMITTER_EMAIL: "test@backdot.dev",
+  };
+}
+
 describe("backdot --init", () => {
   let initDir: string;
   let initEnv: NodeJS.ProcessEnv;
@@ -101,14 +116,7 @@ describe("backdot e2e", () => {
       ),
     );
 
-    env = {
-      ...process.env,
-      HOME: tempDir,
-      GIT_AUTHOR_NAME: "backdot-test",
-      GIT_AUTHOR_EMAIL: "test@backdot.dev",
-      GIT_COMMITTER_NAME: "backdot-test",
-      GIT_COMMITTER_EMAIL: "test@backdot.dev",
-    };
+    env = testEnv(tempDir);
   });
 
   afterAll(() => {
@@ -125,7 +133,7 @@ describe("backdot e2e", () => {
     expect(output).toContain("Backup complete");
 
     const verifyDir = path.join(tempDir, "verify-clone");
-    execSync(`git clone "${remoteRepo}" "${verifyDir}"`, { stdio: "ignore" });
+    cloneRemote(remoteRepo, verifyDir);
 
     expect(fs.existsSync(path.join(verifyDir, "test-machine", ".zshrc"))).toBe(true);
     expect(
@@ -186,6 +194,60 @@ describe("backdot e2e", () => {
   });
 });
 
+describe("negation patterns", () => {
+  let tempDir: string;
+  let remoteRepo: string;
+  let env: NodeJS.ProcessEnv;
+
+  beforeAll(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-negate-"));
+
+    remoteRepo = path.join(tempDir, "remote.git");
+    execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+    fs.mkdirSync(path.join(tempDir, ".config", "app"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".config", "app", "config.json"), '{"a":1}\n');
+    fs.writeFileSync(path.join(tempDir, ".config", "app", "secret.key"), "supersecret\n");
+    fs.writeFileSync(path.join(tempDir, ".config", "app", "cache.tmp"), "cached\n");
+
+    fs.writeFileSync(
+      path.join(tempDir, ".backdot.json"),
+      JSON.stringify(
+        {
+          repository: remoteRepo,
+          machine: "negate-machine",
+          paths: ["~/.config/app/*", "!~/.config/app/secret.key", "!~/.config/app/cache.tmp"],
+        },
+        null,
+        2,
+      ),
+    );
+
+    env = testEnv(tempDir);
+  });
+
+  afterAll(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("--backup excludes files matching negation patterns", () => {
+    const output = run(["--backup"], env);
+    expect(output).toContain("Backup complete");
+
+    const verifyDir = path.join(tempDir, "verify-clone");
+    cloneRemote(remoteRepo, verifyDir);
+
+    const machineDir = path.join(verifyDir, "negate-machine");
+
+    expect(fs.existsSync(path.join(machineDir, ".config", "app", "config.json"))).toBe(true);
+
+    expect(fs.existsSync(path.join(machineDir, ".config", "app", "secret.key"))).toBe(false);
+    expect(fs.existsSync(path.join(machineDir, ".config", "app", "cache.tmp"))).toBe(false);
+
+    fs.rmSync(verifyDir, { recursive: true, force: true });
+  });
+});
+
 describe("concurrent multi-machine backup", () => {
   let tempDir: string;
   let remoteRepo: string;
@@ -197,14 +259,7 @@ describe("concurrent multi-machine backup", () => {
   ];
 
   function envForMachine(name: string): NodeJS.ProcessEnv {
-    return {
-      ...process.env,
-      HOME: path.join(tempDir, name),
-      GIT_AUTHOR_NAME: "backdot-test",
-      GIT_AUTHOR_EMAIL: "test@backdot.dev",
-      GIT_COMMITTER_NAME: "backdot-test",
-      GIT_COMMITTER_EMAIL: "test@backdot.dev",
-    };
+    return testEnv(path.join(tempDir, name));
   }
 
   beforeAll(() => {
@@ -252,9 +307,8 @@ describe("concurrent multi-machine backup", () => {
       expect(output).toContain("Backup complete");
     }
 
-    // Clone the remote and verify every machine's updated file is present
     const verifyDir = path.join(tempDir, "verify-clone");
-    execSync(`git clone "${remoteRepo}" "${verifyDir}"`, { stdio: "ignore" });
+    cloneRemote(remoteRepo, verifyDir);
 
     for (const m of machines) {
       const filePath = path.join(verifyDir, m.name, m.file);

@@ -78,4 +78,34 @@ describe("resolveFiles", () => {
     const files = resolveFiles({ paths: ["/home/user/.zshrc"] });
     expect(files).toEqual(["/home/user/.zshrc"]);
   });
+
+  it("passes all patterns to fast-glob in a single call", () => {
+    vi.mocked(fg.sync).mockReturnValue(["/home/user/.zshrc"]);
+    vi.mocked(fs.accessSync).mockReturnValue(undefined);
+    vi.mocked(fs.statSync).mockReturnValue(fileStatMock);
+
+    resolveFiles({ paths: ["/home/user/**", "!/home/user/tmp/**"] });
+    expect(fg.sync).toHaveBeenCalledTimes(1);
+    expect(fg.sync).toHaveBeenCalledWith(["/home/user/**", "!/home/user/tmp/**"], {
+      absolute: true,
+      dot: true,
+    });
+  });
+
+  it("passes negation patterns through to fast-glob", () => {
+    vi.mocked(fg.sync).mockReturnValue(["/home/user/.zshrc"]);
+    vi.mocked(fs.accessSync).mockReturnValue(undefined);
+    vi.mocked(fs.statSync).mockReturnValue(fileStatMock);
+
+    const files = resolveFiles({
+      paths: ["/home/user/**", "!/home/user/.cache/**"],
+    });
+    expect(files).toEqual(["/home/user/.zshrc"]);
+  });
+
+  it("returns empty array when paths is empty", () => {
+    const files = resolveFiles({ paths: [] });
+    expect(files).toEqual([]);
+    expect(fg.sync).not.toHaveBeenCalled();
+  });
 });

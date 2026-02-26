@@ -3,11 +3,12 @@ import fg from "fast-glob";
 import { Config } from "./config.js";
 import { logger } from "./log.js";
 
-function resolveGlob(pattern: string): string[] {
+function resolveGlobs(patterns: string[]): string[] {
+  if (patterns.length === 0) return [];
   try {
-    return fg.sync(pattern, { absolute: true, dot: true });
+    return fg.sync(patterns, { absolute: true, dot: true });
   } catch {
-    logger.warn(`Glob pattern failed: ${pattern}`);
+    logger.warn("Glob pattern resolution failed");
     return [];
   }
 }
@@ -19,7 +20,7 @@ const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
  * Skips entries that fail resolution and logs warnings.
  */
 export function resolveFiles(config: Config): string[] {
-  const unique = [...new Set(config.paths.flatMap(resolveGlob))];
+  const unique = [...new Set(resolveGlobs(config.paths))];
 
   return unique.filter((filePath) => {
     try {

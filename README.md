@@ -41,6 +41,14 @@ backdot --schedule
 | ------- | ------------------------------------------------------ |
 | `paths` | Glob patterns matching individual files or directories |
 
+Prefix a pattern with `!` to exclude matching files:
+
+```json
+{
+  "paths": ["~/.config/ghostty/**", "!~/.config/ghostty/crash-reports/**"]
+}
+```
+
 ## Commands
 
 | Command        | Description                                            |
