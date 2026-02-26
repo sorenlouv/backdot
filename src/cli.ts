@@ -13,6 +13,7 @@ import { restore } from "./restore.js";
 import { init } from "./init.js";
 import { setupLaunchd, uninstallLaunchd, isScheduled } from "./plist.js";
 import { logger } from "./log.js";
+import { sendNotification } from "./notify.js";
 
 function getVersion(): string {
   const pkgPath = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../package.json");
@@ -191,6 +192,9 @@ async function main(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(msg);
     console.error(`\n  Error: ${msg}\n`);
+    if (!process.stdout.isTTY) {
+      sendNotification("Backdot", `Backup failed: ${msg}`);
+    }
     process.exit(1);
   }
 }
