@@ -34,8 +34,8 @@ describe("init", () => {
     const parsed = JSON.parse(content);
     expect(parsed.repository).toBe("git@github.com:USERNAME/backdot-backup.git");
     expect(parsed.machine).toBe(os.hostname());
-    expect(parsed["files.gitignored"]).toEqual([]);
-    expect(parsed["files.match"]).toEqual(["~/.zshrc", "~/.gitconfig"]);
+    expect(parsed.gitignored).toEqual([]);
+    expect(parsed.paths).toEqual(["~/.zshrc", "~/.gitconfig"]);
   });
 
   it("does not overwrite existing config file", () => {

@@ -35,7 +35,7 @@ describe("backdot --init", () => {
   it("creates ~/.backdot.json with defaults", () => {
     const output = run(["--init"], initEnv);
     expect(output).toContain("Welcome to backdot");
-    expect(output).toContain("Created ~/.backdot.json");
+    expect(output).toContain(".backdot.json with defaults");
 
     const configPath = path.join(initDir, ".backdot.json");
     expect(fs.existsSync(configPath)).toBe(true);
@@ -43,7 +43,7 @@ describe("backdot --init", () => {
     const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     expect(config.repository).toBe("git@github.com:USERNAME/backdot-backup.git");
     expect(config.machine).toBe(os.hostname());
-    expect(config["files.match"]).toEqual(["~/.zshrc", "~/.gitconfig"]);
+    expect(config.paths).toEqual(["~/.zshrc", "~/.gitconfig"]);
   });
 
   it("does not overwrite existing config on second run", () => {
@@ -83,7 +83,7 @@ describe("backdot e2e", () => {
         {
           repository: remoteRepo,
           machine: "test-machine",
-          "files.match": ["~/.zshrc", "~/.config/test/**"],
+          paths: ["~/.zshrc", "~/.config/test/**"],
         },
         null,
         2,

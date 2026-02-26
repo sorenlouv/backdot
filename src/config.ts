@@ -18,20 +18,12 @@ const ConfigSchema = z
   .object({
     repository: z.string().min(1),
     machine: z.string().min(1),
-    "files.gitignored": pathList,
-    "files.match": pathList,
+    gitignored: pathList,
+    paths: pathList,
   })
-  .refine((c) => c["files.gitignored"].length > 0 || c["files.match"].length > 0, {
-    message: 'At least one of "files.gitignored" or "files.match" must be a non-empty array',
-  })
-  .transform((c) => ({
-    repository: c.repository,
-    machine: c.machine,
-    files: {
-      gitignored: c["files.gitignored"],
-      match: c["files.match"],
-    },
-  }));
+  .refine((c) => c.gitignored.length > 0 || c.paths.length > 0, {
+    message: 'At least one of "gitignored" or "paths" must be a non-empty array',
+  });
 
 export type Config = z.infer<typeof ConfigSchema>;
 

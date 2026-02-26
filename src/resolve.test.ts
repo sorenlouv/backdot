@@ -35,9 +35,9 @@ const largeFileStatMock = {
 
 function makeFiles(
   gitignored: string[] = [],
-  match: string[] = [],
-): { gitignored: string[]; match: string[] } {
-  return { gitignored, match };
+  paths: string[] = [],
+): { gitignored: string[]; paths: string[] } {
+  return { gitignored, paths };
 }
 
 describe("resolveFiles", () => {

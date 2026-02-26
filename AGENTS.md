@@ -1,27 +1,38 @@
 # AGENTS.md
 
-## Design principles
+## Why this tool exists
 
-Every feature must be **fast**, **simple**, and **beautiful**. This tool solves one thing — backing up dotfiles and gitignored files — and does it exceptionally well. Resist scope creep. When in doubt, leave it out.
+The author lost a machine and with it irreplaceable files: SSH keys, shell history, years of zsh config, gitignored dev configs. Backdot ensures this never happens again by automatically backing up dotfiles and gitignored files to a Git repo.
 
-## Requirements
+Inspired by [mackup](https://github.com/lra/mackup), but mackup replaces files with symlinks — that's intrusive and has caused data loss. Backdot only copies; it never modifies or replaces originals.
 
-- **Backup** resolves files from two sources (gitignored dirs via `git ls-files`, glob patterns via `fast-glob`), copies them to a local staging repo, and pushes to a remote Git repo. The config file (`~/.backdot.json`) is always included.
-- **Restore** pulls the backup repo, restores new files automatically, and prompts (interactive checkbox) before overwriting existing files.
-- **Status** compares local files against the remote backup using git object hashes and reports which files are backed up, modified, or not yet backed up.
-- **Schedule/Unschedule** installs or removes a macOS launchd job for daily automatic backups.
-- **Multi-machine** support: files are stored under `<repo>/<machine>/` so one repo can back up multiple machines.
-- Files >10 MB are skipped. Files outside `$HOME` are stored with the leading `/` stripped.
-- On backup success, a clickable commit URL (GitHub/GitLab/Bitbucket) is shown to the user.
+## Principles
 
-## Key architecture decisions
+Fast, simple, beautiful. When in doubt, leave it out.
 
-- The backup repo is cloned to `~/.backdot/repo`. Git sync uses fetch + hard reset (not merge) to avoid conflicts.
-- `compareFiles` (used by `--status`) compares git object hashes from the remote tree against hashes of local source files — no local checkout needed.
+## Invariants
 
-## Manual testing
+- **No symlinks, ever.** Files are copied to the backup repo. Originals are never touched.
+- **No merge conflicts, ever.** Backup: local source files are the single source of truth — fetch + hard reset, then overwrite. Restore: remote repo is the single source of truth — same strategy, opposite direction.
+- **Machines must never clobber each other.** Files live under `<repo>/<machine>/`. Two machines sharing a repo must remain fully isolated. Breaking this would be a critical bug.
+- **Restore is self-bootstrapping.** The config file is always included in backups so `--restore <url>` works on a blank machine with zero prior setup.
+- **Non-destructive restore.** New files restore automatically. Existing files prompt before overwriting.
 
-Override `HOME` to a temp directory to test any command without touching your real config or backup repo:
+## Scope
+
+- **Git is the only backend.** Non-git backends: firm no.
+- **macOS scheduling first.** Linux/Windows welcome if requested.
+- The 10 MB file-size limit has no strong justification — can be raised or removed.
+- Other features: consider if highly requested and/or simple to implement.
+
+## Testing
+
+```bash
+npm test              # unit tests (vitest)
+npm run test:e2e      # build + e2e
+```
+
+Override `HOME` to test without touching real config:
 
 ```bash
 HOME=$(mktemp -d) node dist/cli.js --init

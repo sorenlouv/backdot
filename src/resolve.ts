@@ -41,18 +41,13 @@ const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
  * Resolve all file entries to absolute paths.
  * Skips entries that fail resolution and logs warnings.
  */
-export function resolveFiles(files: Config["files"]): string[] {
-  const allFiles: string[] = [];
-
-  for (const dirPath of files.gitignored) {
-    allFiles.push(...resolveGitignored(dirPath));
-  }
-
-  for (const pattern of files.match) {
-    allFiles.push(...resolveGlob(pattern));
-  }
-
-  const unique = [...new Set(allFiles)];
+export function resolveFiles(config: Config): string[] {
+  const unique = [
+    ...new Set([
+      ...config.gitignored.flatMap(resolveGitignored),
+      ...config.paths.flatMap(resolveGlob),
+    ]),
+  ];
 
   return unique.filter((filePath) => {
     try {

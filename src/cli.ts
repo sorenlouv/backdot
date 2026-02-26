@@ -32,7 +32,7 @@ async function backup(): Promise<void> {
 
   const spinner = ora("Resolving files").start();
   try {
-    const userFiles = resolveFiles(config.files);
+    const userFiles = resolveFiles(config);
     logger.info(`Resolved ${userFiles.length} file(s)`);
 
     if (userFiles.length === 0) {
@@ -83,7 +83,7 @@ async function status(): Promise<void> {
     console.log();
 
     const spinner = ora("Resolving files").start();
-    const userFiles = resolveFiles(config.files);
+    const userFiles = resolveFiles(config);
 
     if (userFiles.length === 0) {
       spinner.warn("No files resolved. Check your ~/.backdot.json entries.");

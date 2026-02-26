@@ -19,8 +19,8 @@ This creates `~/.backdot.json` with sensible defaults and walks you through setu
 {
   "repository": "git@github.com:USERNAME/backdot-backup.git",
   "machine": "my-work-laptop",
-  "files.gitignored": ["~/my-project"],
-  "files.match": ["~/.zshrc", "~/.oh-my-zsh/custom/*.zsh", "~/.ssh/config/config", "~/.npmrc"]
+  "gitignored": ["~/my-project"],
+  "paths": ["~/.zshrc", "~/.oh-my-zsh/custom/*.zsh", "~/.ssh/config/config", "~/.npmrc"]
 }
 ```
 
@@ -32,10 +32,10 @@ backdot --backup
 
 ## Configuration
 
-| Key                | Description                                            |
-| ------------------ | ------------------------------------------------------ |
-| `files.gitignored` | Directories to scan for gitignored files               |
-| `files.match`      | Glob patterns matching individual files or directories |
+| Key          | Description                                            |
+| ------------ | ------------------------------------------------------ |
+| `gitignored` | Directories to scan for gitignored files               |
+| `paths`      | Glob patterns matching individual files or directories |
 
 ## Commands
 
