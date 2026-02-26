@@ -34,7 +34,8 @@
     "format:check": "prettier --check src/",
     "test": "vitest run --exclude src/e2e.test.ts",
     "test:e2e": "npm run build && vitest run src/e2e.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.3.0",
@@ -49,11 +50,20 @@
   "engines": {
     "node": ">=18"
   },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,yml}": "prettier --write"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.13.5",
     "eslint": "^10.0.2",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.8.1",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.56.1",
