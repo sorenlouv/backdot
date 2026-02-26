@@ -61,10 +61,7 @@ describe("copyToStaging", () => {
     copyToStaging(files, MACHINE);
 
     const dir = machineDir(MACHINE);
-    expect(fs.copyFileSync).toHaveBeenCalledWith(
-      `${HOME}/.zshrc`,
-      path.join(dir, ".zshrc"),
-    );
+    expect(fs.copyFileSync).toHaveBeenCalledWith(`${HOME}/.zshrc`, path.join(dir, ".zshrc"));
     expect(fs.copyFileSync).toHaveBeenCalledWith(
       `${HOME}/.config/ghostty/config`,
       path.join(dir, ".config/ghostty/config"),
@@ -140,9 +137,7 @@ describe("cleanStaging", () => {
 
 describe("getStagedPath", () => {
   it("maps a home-relative file to the machine subdirectory", () => {
-    expect(getStagedPath(`${HOME}/.zshrc`, MACHINE)).toBe(
-      path.join(machineDir(MACHINE), ".zshrc"),
-    );
+    expect(getStagedPath(`${HOME}/.zshrc`, MACHINE)).toBe(path.join(machineDir(MACHINE), ".zshrc"));
   });
 
   it("preserves nested directory structure", () => {
@@ -152,9 +147,7 @@ describe("getStagedPath", () => {
   });
 
   it("handles files outside home dir by stripping leading slash", () => {
-    expect(getStagedPath("/etc/hosts", MACHINE)).toBe(
-      path.join(machineDir(MACHINE), "etc/hosts"),
-    );
+    expect(getStagedPath("/etc/hosts", MACHINE)).toBe(path.join(machineDir(MACHINE), "etc/hosts"));
   });
 });
 

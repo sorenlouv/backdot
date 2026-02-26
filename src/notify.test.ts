@@ -50,8 +50,6 @@ describe("sendNotification", () => {
     });
 
     expect(() => sendNotification("Backdot", "Backup failed")).not.toThrow();
-    expect(logger.warn).toHaveBeenCalledWith(
-      "Failed to send notification: osascript not found",
-    );
+    expect(logger.warn).toHaveBeenCalledWith("Failed to send notification: osascript not found");
   });
 });

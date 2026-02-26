@@ -128,11 +128,15 @@ describe("backdot e2e", () => {
     execSync(`git clone "${remoteRepo}" "${verifyDir}"`, { stdio: "ignore" });
 
     expect(fs.existsSync(path.join(verifyDir, "test-machine", ".zshrc"))).toBe(true);
-    expect(fs.existsSync(path.join(verifyDir, "test-machine", ".config", "test", "settings.json"))).toBe(true);
+    expect(
+      fs.existsSync(path.join(verifyDir, "test-machine", ".config", "test", "settings.json")),
+    ).toBe(true);
     expect(fs.existsSync(path.join(verifyDir, "test-machine", ".backdot.json"))).toBe(true);
     expect(fs.existsSync(path.join(verifyDir, "README.md"))).toBe(true);
 
-    expect(fs.readFileSync(path.join(verifyDir, "test-machine", ".zshrc"), "utf-8")).toBe(ZSHRC_CONTENT);
+    expect(fs.readFileSync(path.join(verifyDir, "test-machine", ".zshrc"), "utf-8")).toBe(
+      ZSHRC_CONTENT,
+    );
 
     fs.rmSync(verifyDir, { recursive: true, force: true });
   });
@@ -176,7 +180,9 @@ describe("backdot e2e", () => {
     expect(output).toContain("Restored");
 
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(MODIFIED_ZSHRC);
-    expect(fs.readFileSync(path.join(tempDir, ".config", "test", "settings.json"), "utf-8")).toBe(SETTINGS_CONTENT);
+    expect(fs.readFileSync(path.join(tempDir, ".config", "test", "settings.json"), "utf-8")).toBe(
+      SETTINGS_CONTENT,
+    );
   });
 });
 

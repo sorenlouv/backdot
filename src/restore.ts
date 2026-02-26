@@ -28,7 +28,9 @@ function listMachines(): string[] {
     .map((e) => e.name);
 }
 
-async function resolveRepoAndMachine(repoUrl?: string): Promise<{ repository: string; machine: string }> {
+async function resolveRepoAndMachine(
+  repoUrl?: string,
+): Promise<{ repository: string; machine: string }> {
   if (!repoUrl) {
     const config = loadConfig();
     return { repository: config.repository, machine: config.machine };

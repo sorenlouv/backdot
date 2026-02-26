@@ -44,9 +44,7 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } |
   await pRetry(async () => git.push(["-u", "origin", "HEAD"]), {
     retries: 5,
     onFailedAttempt: async ({ attemptNumber, retriesLeft }) => {
-      logger.info(
-        `Push failed (attempt ${attemptNumber}, ${retriesLeft} retries left), rebasing`,
-      );
+      logger.info(`Push failed (attempt ${attemptNumber}, ${retriesLeft} retries left), rebasing`);
       await git.fetch("origin");
       const branch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
       await git.rebase([`origin/${branch}`]);

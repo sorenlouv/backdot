@@ -66,10 +66,7 @@ describe("gitPull", () => {
 
     await gitPull("git@github.com:test/repo.git");
 
-    expect(mockGit.clone).toHaveBeenCalledWith(
-      "git@github.com:test/repo.git",
-      "/mock/staging"
-    );
+    expect(mockGit.clone).toHaveBeenCalledWith("git@github.com:test/repo.git", "/mock/staging");
   });
 
   it("falls back to init when clone fails (empty remote)", async () => {
@@ -126,4 +123,3 @@ describe("gitCommitAndPush", () => {
     expect(result).toEqual({ commitUrl: null });
   });
 });
-
