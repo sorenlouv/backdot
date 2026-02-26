@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import chalk from "chalk";
 import ora from "ora";
 import { loadConfig, CONFIG_PATH } from "./config.js";
 import { resolveFiles } from "./resolve.js";
-import { cleanStaging, copyToStaging, writeRepoReadme } from "./staging.js";
+import { cleanStaging, copyToStaging, writeRepoReadme, compareFiles } from "./staging.js";
 import { gitPull, gitCommitAndPush } from "./git.js";
 import { restore } from "./restore.js";
 import { setupLaunchd, uninstallLaunchd, isScheduled } from "./plist.js";
@@ -60,7 +62,12 @@ async function backup(): Promise<void> {
   logger.info("Backup complete");
 }
 
-function status(): void {
+function tildePath(filePath: string): string {
+  const home = os.homedir();
+  return filePath.startsWith(home) ? "~" + filePath.slice(home.length) : filePath;
+}
+
+async function status(): Promise<void> {
   const scheduled = isScheduled();
   console.log();
   console.log(`  Schedule:  ${scheduled ? "active (daily at 02:00)" : "not active"}`);
@@ -76,14 +83,47 @@ function status(): void {
 
     if (userFiles.length === 0) {
       spinner.warn("No files resolved. Check your ~/.backdot.json entries.");
-    } else {
-      const files = [...userFiles, CONFIG_PATH];
-      spinner.stop();
-      console.log(`${files.length} file(s) resolved:`);
       console.log();
-      for (const file of files) {
-        console.log(`  ${file}`);
+      return;
+    }
+
+    const files = [...userFiles, CONFIG_PATH];
+
+    spinner.text = "Comparing with remote backup";
+    const { backedUp, modified, notBackedUp } = await compareFiles(
+      files,
+      config.machine,
+    );
+    spinner.stop();
+
+    if (modified.length === 0 && notBackedUp.length === 0) {
+      console.log(chalk.green(`  All ${files.length} file(s) are backed up ✓`));
+    } else {
+      if (modified.length > 0) {
+        console.log(chalk.yellow(`  Modified since last backup (${modified.length}):`));
+        for (const f of modified) {
+          console.log(`        ${tildePath(f)}`);
+        }
+        console.log();
       }
+
+      if (notBackedUp.length > 0) {
+        console.log(chalk.red(`  Not yet backed up (${notBackedUp.length}):`));
+        for (const f of notBackedUp) {
+          console.log(`        ${tildePath(f)}`);
+        }
+        console.log();
+      }
+
+      if (backedUp.length > 0) {
+        console.log(chalk.green(`  Backed up (${backedUp.length}):`));
+        for (const f of backedUp) {
+          console.log(`        ${tildePath(f)}`);
+        }
+        console.log();
+      }
+
+      console.log(`  Run ${chalk.bold("backdot --backup")} to back up all changes.`);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -114,7 +154,7 @@ async function main(): Promise<void> {
       requireMacOS();
       uninstallLaunchd();
     } else if (command === "--status") {
-      status();
+      await status();
     } else if (command === "--restore") {
       await restore();
     } else if (command === "--version") {

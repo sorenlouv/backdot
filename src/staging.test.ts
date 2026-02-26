@@ -13,12 +13,33 @@ vi.mock("node:fs", () => ({
   },
 }));
 
+vi.mock("node:child_process", () => ({
+  execFileSync: vi.fn(),
+}));
+
+const mockGit = {
+  fetch: vi.fn(),
+  revparse: vi.fn(),
+};
+vi.mock("simple-git", () => ({
+  simpleGit: () => mockGit,
+}));
+
 vi.mock("./log.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 import fs from "node:fs";
-import { cleanStaging, copyToStaging, writeRepoReadme, STAGING_DIR, machineDir } from "./staging.js";
+import { execFileSync } from "node:child_process";
+import {
+  cleanStaging,
+  copyToStaging,
+  writeRepoReadme,
+  getStagedPath,
+  compareFiles,
+  STAGING_DIR,
+  machineDir,
+} from "./staging.js";
 
 const HOME = os.homedir();
 const MACHINE = "sorens-work-laptop";
@@ -113,5 +134,120 @@ describe("cleanStaging", () => {
       recursive: true,
       force: true,
     });
+  });
+});
+
+describe("getStagedPath", () => {
+  it("maps a home-relative file to the machine subdirectory", () => {
+    expect(getStagedPath(`${HOME}/.zshrc`, MACHINE)).toBe(
+      path.join(machineDir(MACHINE), ".zshrc"),
+    );
+  });
+
+  it("preserves nested directory structure", () => {
+    expect(getStagedPath(`${HOME}/.config/ghostty/config`, MACHINE)).toBe(
+      path.join(machineDir(MACHINE), ".config/ghostty/config"),
+    );
+  });
+
+  it("handles files outside home dir by stripping leading slash", () => {
+    expect(getStagedPath("/etc/hosts", MACHINE)).toBe(
+      path.join(machineDir(MACHINE), "etc/hosts"),
+    );
+  });
+});
+
+describe("compareFiles", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("returns all files as notBackedUp when no git repo exists", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
+
+    const result = await compareFiles(files, MACHINE);
+
+    expect(result.notBackedUp).toEqual(files);
+    expect(result.backedUp).toEqual([]);
+    expect(result.modified).toEqual([]);
+  });
+
+  it("returns empty result for empty file list", async () => {
+    const result = await compareFiles([], MACHINE);
+
+    expect(result.notBackedUp).toEqual([]);
+    expect(result.backedUp).toEqual([]);
+    expect(result.modified).toEqual([]);
+  });
+
+  it("categorises files by comparing git hashes", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockGit.fetch.mockResolvedValue(undefined);
+    mockGit.revparse.mockResolvedValue("main");
+
+    const zshrcPath = `${MACHINE}/.zshrc`;
+    const npmrcPath = `${MACHINE}/.npmrc`;
+
+    vi.mocked(execFileSync).mockImplementation((_cmd, args) => {
+      const a = args as string[];
+      if (a[0] === "ls-tree") {
+        return `100644 blob aaa111\t${zshrcPath}\n100644 blob bbb222\t${npmrcPath}\n`;
+      }
+      // hash-object: return matching hash for .zshrc, different for .npmrc
+      return "aaa111\nccc333\n";
+    });
+
+    const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
+    const result = await compareFiles(files, MACHINE);
+
+    expect(result.backedUp).toEqual([`${HOME}/.zshrc`]);
+    expect(result.modified).toEqual([`${HOME}/.npmrc`]);
+    expect(result.notBackedUp).toEqual([]);
+  });
+
+  it("marks files as notBackedUp when not in ls-tree output", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockGit.fetch.mockResolvedValue(undefined);
+    mockGit.revparse.mockResolvedValue("main");
+
+    vi.mocked(execFileSync).mockImplementation((_cmd, args) => {
+      const a = args as string[];
+      if (a[0] === "ls-tree") return "";
+      return "aaa111\n";
+    });
+
+    const files = [`${HOME}/.zshrc`];
+    const result = await compareFiles(files, MACHINE);
+
+    expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
+    expect(result.backedUp).toEqual([]);
+    expect(result.modified).toEqual([]);
+  });
+
+  it("returns all files as notBackedUp when ls-tree fails", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockGit.fetch.mockResolvedValue(undefined);
+    mockGit.revparse.mockResolvedValue("main");
+
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("fatal: not a tree object");
+    });
+
+    const files = [`${HOME}/.zshrc`];
+    const result = await compareFiles(files, MACHINE);
+
+    expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
+  });
+
+  it("returns all files as notBackedUp when revparse fails", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockGit.fetch.mockResolvedValue(undefined);
+    mockGit.revparse.mockRejectedValue(new Error("HEAD not found"));
+
+    const files = [`${HOME}/.zshrc`];
+    const result = await compareFiles(files, MACHINE);
+
+    expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
   });
 });
