@@ -20,7 +20,7 @@ This creates `~/.backdot.json` with sensible defaults and walks you through setu
   "repository": "git@github.com:USERNAME/backdot-backup.git",
   "machine": "my-work-laptop",
   "gitignored": ["~/my-project"],
-  "paths": ["~/.zshrc", "~/.oh-my-zsh/custom/*.zsh", "~/.ssh/config/config", "~/.npmrc"]
+  "paths": ["~/.zshrc", "~/.oh-my-zsh/custom/*.zsh", "~/.ssh/config", "~/.npmrc"]
 }
 ```
 
