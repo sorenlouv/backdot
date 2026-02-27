@@ -6,12 +6,64 @@ import { logger } from "./log.js";
 import { STAGING_DIR } from "./staging.js";
 import { getCommitUrl } from "./commitUrl.js";
 
-export async function gitPull(repository: string): Promise<void> {
+interface FileChangeSummary {
+  created: string[];
+  deleted: string[];
+  modified: string[];
+  renamed: Array<{ from: string; to: string }>;
+}
+
+export function buildCommitMessage(changes: FileChangeSummary, maxLen = 250): string {
+  const unique = (paths: string[]) => [...new Set(paths.map((f) => path.basename(f)))];
+
+  const removed = unique(changes.deleted);
+  const added = unique(changes.created);
+  const modified = unique([...changes.modified, ...changes.renamed.map((r) => r.to)]);
+
+  const categories = [
+    { label: "removed", files: removed },
+    { label: "added", files: added },
+    { label: "modified", files: modified },
+  ].filter((c) => c.files.length > 0);
+
+  if (categories.length === 0) {
+    return "backup";
+  }
+
+  function format(cat: (typeof categories)[number], listFiles: boolean): string {
+    if (listFiles) {
+      return `${cat.label}: ${cat.files.join(", ")}`;
+    }
+    const n = cat.files.length;
+    return `${cat.label}: ${n} file${n !== 1 ? "s" : ""}`;
+  }
+
+  function build(listFlags: boolean[]): string {
+    return categories.map((cat, i) => format(cat, listFlags[i])).join("; ");
+  }
+
+  const flags = categories.map(() => true);
+  let msg = build(flags);
+  if (msg.length <= maxLen) return msg;
+
+  for (const label of ["modified", "added", "removed"]) {
+    const idx = categories.findIndex((c) => c.label === label);
+    if (idx !== -1 && flags[idx]) {
+      flags[idx] = false;
+      msg = build(flags);
+      if (msg.length <= maxLen) return msg;
+    }
+  }
+
+  return msg.slice(0, maxLen - 3) + "...";
+}
+
+export async function gitPull(repository: string, commit?: string): Promise<void> {
   if (fs.existsSync(path.join(STAGING_DIR, ".git"))) {
     const git = simpleGit(STAGING_DIR);
     await git.fetch("origin");
-    const branch = await git.revparse(["--abbrev-ref", "HEAD"]);
-    await git.reset(["--hard", `origin/${branch}`]);
+    const target = commit ?? `origin/${await git.revparse(["--abbrev-ref", "HEAD"])}`;
+    await git.reset(["--hard", target]);
     await git.clean(CleanOptions.FORCE, ["-d"]);
   } else {
     try {
@@ -22,8 +74,25 @@ export async function gitPull(repository: string): Promise<void> {
       await git.init();
       await git.addRemote("origin", repository);
     }
+    if (commit) {
+      const git = simpleGit(STAGING_DIR);
+      await git.reset(["--hard", commit]);
+      await git.clean(CleanOptions.FORCE, ["-d"]);
+    }
   }
   logger.info("Synced staging directory from remote");
+}
+
+export async function gitLog(
+  limit = 20,
+): Promise<Array<{ hash: string; date: string; message: string }>> {
+  const git = simpleGit(STAGING_DIR);
+  const log = await git.log({ maxCount: limit });
+  return log.all.map((entry) => ({
+    hash: entry.hash,
+    date: entry.date,
+    message: entry.message,
+  }));
 }
 
 export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } | null> {
@@ -37,8 +106,7 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } |
     return null;
   }
 
-  const date = new Date().toISOString().split("T")[0];
-  const message = `Automated backup: ${date}`;
+  const message = buildCommitMessage(status);
   await git.commit(message);
 
   await pRetry(async () => git.push(["-u", "origin", "HEAD"]), {

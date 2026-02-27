@@ -192,6 +192,26 @@ describe("backdot e2e", () => {
       SETTINGS_CONTENT,
     );
   });
+
+  it("--restore --commit restores from a specific earlier backup", () => {
+    const verifyDir = path.join(tempDir, "verify-log");
+    cloneRemote(remoteRepo, verifyDir);
+    const firstCommitSha = execSync("git rev-list --reverse HEAD | head -n 1", {
+      cwd: verifyDir,
+      encoding: "utf-8",
+    }).trim();
+    fs.rmSync(verifyDir, { recursive: true, force: true });
+
+    fs.unlinkSync(path.join(tempDir, ".zshrc"));
+    fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
+    fs.unlinkSync(path.join(tempDir, ".backdot.json"));
+
+    const output = run(["--restore", remoteRepo, "--commit", firstCommitSha], env);
+    expect(output).toContain("Restored");
+
+    // The first commit had the original ZSHRC_CONTENT, not the MODIFIED_ZSHRC
+    expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(ZSHRC_CONTENT);
+  });
 });
 
 describe("negation patterns", () => {

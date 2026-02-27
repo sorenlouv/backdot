@@ -51,14 +51,16 @@ Prefix a pattern with `!` to exclude matching files:
 
 ## Commands
 
-| Command        | Description                                            |
-| -------------- | ------------------------------------------------------ |
-| `--init`       | Set up backdot for the first time                      |
-| `--backup`     | Run a backup now                                       |
-| `--restore`    | Restore files to their original locations              |
-| `--schedule`   | Schedule automatic daily backup via launchd (Mac-only) |
-| `--unschedule` | Remove the daily schedule                              |
-| `--status`     | Show schedule and resolved file list                   |
+| Command                          | Description                                            |
+| -------------------------------- | ------------------------------------------------------ |
+| `--init`                         | Set up backdot for the first time                      |
+| `--backup`                       | Run a backup now                                       |
+| `--restore [url]`                | Restore files to their original locations              |
+| `--restore [url] --commit <sha>` | Restore from a specific backup commit                  |
+| `--history [url]`                | Browse and restore a previous backup                   |
+| `--schedule`                     | Schedule automatic daily backup via launchd (Mac-only) |
+| `--unschedule`                   | Remove the daily schedule                              |
+| `--status`                       | Show schedule and resolved file list                   |
 
 ## Development
 

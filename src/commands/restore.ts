@@ -30,6 +30,7 @@ function listMachines(): string[] {
 
 async function resolveRepoAndMachine(
   repoUrl?: string,
+  commit?: string,
 ): Promise<{ repository: string; machine: string }> {
   if (!repoUrl) {
     const config = loadConfig();
@@ -37,7 +38,7 @@ async function resolveRepoAndMachine(
   }
 
   const spinner = ora("Cloning backup repository").start();
-  await gitPull(repoUrl);
+  await gitPull(repoUrl, commit);
   spinner.stop();
 
   const machines = listMachines();
@@ -51,6 +52,7 @@ async function resolveRepoAndMachine(
   } else {
     machine = await select({
       message: "Multiple machines found. Which one do you want to restore?",
+      loop: false,
       choices: machines.map((m) => ({ name: m, value: m })),
     });
   }
@@ -58,16 +60,16 @@ async function resolveRepoAndMachine(
   return { repository: repoUrl, machine };
 }
 
-export async function restore(repoUrl?: string): Promise<void> {
+export async function restore(repoUrl?: string, commit?: string): Promise<void> {
   logger.info("Starting restore");
 
-  const { repository, machine } = await resolveRepoAndMachine(repoUrl);
+  const { repository, machine } = await resolveRepoAndMachine(repoUrl, commit);
 
   const spinner = ora("Fetching latest backup").start();
   const baseDir = machineDir(machine);
 
   if (!repoUrl) {
-    await gitPull(repository);
+    await gitPull(repository, commit);
   }
   spinner.text = "Resolving files";
 
@@ -118,6 +120,7 @@ export async function restore(repoUrl?: string): Promise<void> {
   if (existing.length > 0) {
     const selected = await checkbox({
       message: `${existing.length} file(s) already exist. Select which to overwrite:`,
+      loop: false,
       choices: existing.map((f) => ({
         name: f.rel,
         value: f,
