@@ -119,7 +119,7 @@ describe("writeRepoReadme", () => {
     expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       path.join(STAGING_DIR, "README.md"),
-      expect.stringContaining(`backdot --restore ${repo}`),
+      expect.stringContaining(`backdot restore ${repo}`),
     );
   });
 });

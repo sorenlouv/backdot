@@ -16,7 +16,7 @@ export async function status(): Promise<void> {
   const scheduled = isScheduled();
   console.log();
   console.log(
-    `  Schedule:  ${scheduled ? "active (daily at 02:00)" : `not active  (run ${chalk.bold("backdot --schedule")} to enable)`}`,
+    `  Schedule:  ${scheduled ? "active (daily at 02:00)" : `not active  (run ${chalk.bold("backdot schedule")} to enable)`}`,
   );
 
   const config = loadConfig();
@@ -76,7 +76,7 @@ export async function status(): Promise<void> {
         console.log();
       }
 
-      console.log(`  Run ${chalk.bold("backdot --backup")} to back up all changes.`);
+      console.log(`  Run ${chalk.bold("backdot backup")} to back up all changes.`);
     }
   } catch (err) {
     spinner.fail("Status check failed");

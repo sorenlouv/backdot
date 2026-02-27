@@ -61,8 +61,8 @@ describe("init", () => {
 
     init();
 
-    expect(logged).toContain("--backup");
-    expect(logged).toContain("--schedule");
-    expect(logged).toContain("--status");
+    expect(logged).toContain("backdot backup");
+    expect(logged).toContain("backdot schedule");
+    expect(logged).toContain("backdot status");
   });
 });

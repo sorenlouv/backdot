@@ -26,7 +26,7 @@ export async function history(repoUrl?: string): Promise<void> {
     return;
   }
 
-  const selected = await select({
+  const selectedCommit = await select({
     message: "Select a backup to restore from:",
     loop: false,
     choices: commits.map((c) => ({
@@ -36,5 +36,5 @@ export async function history(repoUrl?: string): Promise<void> {
   });
 
   console.log();
-  await restore(repoUrl, selected);
+  await restore({ repoUrl, commit: selectedCommit });
 }

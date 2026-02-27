@@ -59,8 +59,8 @@ export function init(): void {
   // Step 3
   console.log(chalk.bold("  Step 3 — Run your first backup"));
   console.log();
-  console.log(`    ${chalk.bold("backdot --backup")}          Run a one-time backup`);
-  console.log(`    ${chalk.bold("backdot --schedule")}        Schedule daily backups (macOS)`);
-  console.log(`    ${chalk.bold("backdot --status")}          Check which files will be backed up`);
+  console.log(`    ${chalk.bold("backdot backup")}            Run a one-time backup`);
+  console.log(`    ${chalk.bold("backdot schedule")}          Schedule daily backups (macOS)`);
+  console.log(`    ${chalk.bold("backdot status")}            Check which files will be backed up`);
   console.log();
 }

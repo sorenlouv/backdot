@@ -45,7 +45,7 @@ function testEnv(homeDir: string): NodeJS.ProcessEnv {
   };
 }
 
-describe("backdot --init", () => {
+describe("backdot init", () => {
   let initDir: string;
   let initEnv: NodeJS.ProcessEnv;
 
@@ -59,7 +59,7 @@ describe("backdot --init", () => {
   });
 
   it("creates ~/.backdot.json with defaults", () => {
-    const output = run(["--init"], initEnv);
+    const output = run(["init"], initEnv);
     expect(output).toContain("Welcome to backdot");
     expect(output).toContain(".backdot.json with defaults");
 
@@ -76,7 +76,7 @@ describe("backdot --init", () => {
     const configPath = path.join(initDir, ".backdot.json");
     const before = fs.readFileSync(configPath, "utf-8");
 
-    const output = run(["--init"], initEnv);
+    const output = run(["init"], initEnv);
     expect(output).toContain("already exists");
 
     const after = fs.readFileSync(configPath, "utf-8");
@@ -123,13 +123,13 @@ describe("backdot e2e", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("--version prints a semver string", () => {
+  it("version prints a version string", () => {
     const output = run(["--version"], env);
-    expect(output.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(output).toMatch(/backdot\/\d+\.\d+\.\d+/);
   });
 
-  it("--backup succeeds and pushes files to the remote repo", () => {
-    const output = run(["--backup"], env);
+  it("backup succeeds and pushes files to the remote repo", () => {
+    const output = run(["backup"], env);
     expect(output).toContain("Backup complete");
 
     const verifyDir = path.join(tempDir, "verify-clone");
@@ -149,42 +149,42 @@ describe("backdot e2e", () => {
     fs.rmSync(verifyDir, { recursive: true, force: true });
   });
 
-  it("--backup with no changes still succeeds", () => {
-    const output = run(["--backup"], env);
+  it("backup with no changes still succeeds", () => {
+    const output = run(["backup"], env);
     expect(output).toContain("Backup complete");
   });
 
-  it("--status shows all files as backed up", () => {
-    const output = run(["--status"], env);
+  it("status shows all files as backed up", () => {
+    const output = run(["status"], env);
     expect(output).toContain("backed up");
     expect(output).not.toContain("Modified");
     expect(output).not.toContain("Not yet backed up");
   });
 
-  it("--status detects a modified file", () => {
+  it("status detects a modified file", () => {
     fs.writeFileSync(path.join(tempDir, ".zshrc"), MODIFIED_ZSHRC);
 
-    const output = run(["--status"], env);
+    const output = run(["status"], env);
     expect(output).toContain("Modified");
   });
 
-  it("--backup after modification pushes the change", () => {
-    const output = run(["--backup"], env);
+  it("backup after modification pushes the change", () => {
+    const output = run(["backup"], env);
     expect(output).toContain("Backup complete");
   });
 
-  it("--status shows all files backed up after second backup", () => {
-    const output = run(["--status"], env);
+  it("status shows all files backed up after second backup", () => {
+    const output = run(["status"], env);
     expect(output).toContain("backed up");
     expect(output).not.toContain("Modified");
   });
 
-  it("--restore recovers deleted files", () => {
+  it("restore recovers deleted files", () => {
     fs.unlinkSync(path.join(tempDir, ".zshrc"));
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
     fs.unlinkSync(path.join(tempDir, ".backdot.json"));
 
-    const output = run(["--restore", remoteRepo, "--yes"], env);
+    const output = run(["restore", remoteRepo, "--yes"], env);
     expect(output).toContain("Restored");
 
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(MODIFIED_ZSHRC);
@@ -193,7 +193,7 @@ describe("backdot e2e", () => {
     );
   });
 
-  it("--restore --commit restores from a specific earlier backup", () => {
+  it("restore --commit restores from a specific earlier backup", () => {
     const verifyDir = path.join(tempDir, "verify-log");
     cloneRemote(remoteRepo, verifyDir);
     const firstCommitSha = execSync("git rev-list --reverse HEAD | head -n 1", {
@@ -206,7 +206,7 @@ describe("backdot e2e", () => {
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
     fs.unlinkSync(path.join(tempDir, ".backdot.json"));
 
-    const output = run(["--restore", remoteRepo, "--commit", firstCommitSha, "--yes"], env);
+    const output = run(["restore", remoteRepo, "--commit", firstCommitSha, "--yes"], env);
     expect(output).toContain("Restored");
 
     // The first commit had the original ZSHRC_CONTENT, not the MODIFIED_ZSHRC
@@ -250,8 +250,8 @@ describe("negation patterns", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("--backup excludes files matching negation patterns", () => {
-    const output = run(["--backup"], env);
+  it("backup excludes files matching negation patterns", () => {
+    const output = run(["backup"], env);
     expect(output).toContain("Backup complete");
 
     const verifyDir = path.join(tempDir, "verify-clone");
@@ -304,7 +304,7 @@ describe("concurrent multi-machine backup", () => {
 
     // Seed the repo sequentially so all machines exist on the remote
     for (const m of machines) {
-      run(["--backup"], envForMachine(m.name));
+      run(["backup"], envForMachine(m.name));
     }
   });
 
@@ -320,7 +320,7 @@ describe("concurrent multi-machine backup", () => {
     }
 
     const results = await Promise.all(
-      machines.map((m) => runAsync(["--backup"], envForMachine(m.name))),
+      machines.map((m) => runAsync(["backup"], envForMachine(m.name))),
     );
 
     for (const output of results) {

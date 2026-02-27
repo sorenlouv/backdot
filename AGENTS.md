@@ -15,7 +15,7 @@ Fast, simple, beautiful. When in doubt, leave it out.
 - **No symlinks, ever.** Files are copied to the backup repo. Originals are never touched.
 - **No merge conflicts, ever.** Backup: local source files are the single source of truth — fetch + hard reset, then overwrite. Restore: remote repo is the single source of truth — same strategy, opposite direction.
 - **Machines must never clobber each other.** Files live under `<repo>/<machine>/`. Two machines sharing a repo must remain fully isolated. Breaking this would be a critical bug.
-- **Restore is self-bootstrapping.** The config file is always included in backups so `--restore <url>` works on a blank machine with zero prior setup.
+- **Restore is self-bootstrapping.** The config file is always included in backups so `restore <url>` works on a blank machine with zero prior setup.
 - **Non-destructive restore.** New files restore automatically. Existing files prompt before overwriting.
 
 ## Scope
@@ -35,5 +35,5 @@ npm run test:e2e      # build + e2e
 Override `HOME` to test without touching real config:
 
 ```bash
-HOME=$(mktemp -d) node dist/cli.js --init
+HOME=$(mktemp -d) node dist/cli.js init
 ```

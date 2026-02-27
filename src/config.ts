@@ -27,7 +27,7 @@ export type Config = z.infer<typeof ConfigSchema>;
 
 export function loadConfig(): Config {
   if (!fs.existsSync(CONFIG_PATH)) {
-    throw new Error(`Config file not found: ${CONFIG_PATH}\n  Run "backdot --init" to create it.`);
+    throw new Error(`Config file not found: ${CONFIG_PATH}\n  Run "backdot init" to create it.`);
   }
 
   let raw: string;

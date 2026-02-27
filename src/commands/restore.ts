@@ -68,15 +68,15 @@ async function resolveRepoAndMachine(
   return { repository: repoUrl, machine };
 }
 
-interface RestoreOptions {
+export async function restore({
+  repoUrl,
+  commit,
+  yes,
+}: {
+  repoUrl?: string;
+  commit?: string;
   yes?: boolean;
-}
-
-export async function restore(
-  repoUrl?: string,
-  commit?: string,
-  options: RestoreOptions = {},
-): Promise<void> {
+} = {}): Promise<void> {
   logger.info("Starting restore");
 
   const { repository, machine } = await resolveRepoAndMachine(repoUrl, commit);
@@ -131,7 +131,7 @@ export async function restore(
 
   let toRestore: FileMapping[];
 
-  if (options.yes) {
+  if (yes) {
     toRestore = fresh;
     if (existing.length > 0) {
       console.log(

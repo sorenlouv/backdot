@@ -38,7 +38,7 @@ function buildPlist(): string {
   <array>
     <string>${escapeXml(nodePath)}</string>
     <string>${escapeXml(scriptPath)}</string>
-    <string>--backup</string>
+    <string>backup</string>
   </array>
   <key>WorkingDirectory</key>
   <string>${escapeXml(workingDir)}</string>

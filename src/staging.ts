@@ -70,7 +70,7 @@ export async function compareFiles(
 
   if (!fs.existsSync(STAGING_GIT_DIR)) {
     return failedComparisonResult(
-      new Error("Backup repository not found. Run backdot --backup first."),
+      new Error('Backup repository not found. Run "backdot backup" first.'),
     );
   }
 
@@ -145,7 +145,7 @@ This repository contains files backed up automatically using [backdot](https://g
 ## Restore
 
 \`\`\`bash
-npx backdot --restore ${repository}
+npx backdot restore ${repository}
 \`\`\`
 
 For full documentation, configuration options, and scheduling, see the [official README](https://github.com/sorenlouv/backdot).

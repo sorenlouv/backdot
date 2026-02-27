@@ -17,18 +17,18 @@ npm run build
 
 ## Scripts
 
-| Command               | Description                          |
-| --------------------- | ------------------------------------ |
-| `npm run build`       | Compile TypeScript to `dist/`        |
-| `npm run build:watch` | Compile in watch mode                |
-| `npm start`           | Run the built CLI (`dist/cli.js`)    |
-| `npm run lint`        | Lint with ESLint                     |
-| `npm run lint:fix`    | Lint and auto-fix                    |
-| `npm run format`      | Format with Prettier                 |
-| `npm run format:check`| Check formatting without writing     |
-| `npm test`            | Run unit tests                       |
-| `npm run test:e2e`    | Build, then run end-to-end tests     |
-| `npm run test:watch`  | Run tests in watch mode              |
+| Command                | Description                       |
+| ---------------------- | --------------------------------- |
+| `npm run build`        | Compile TypeScript to `dist/`     |
+| `npm run build:watch`  | Compile in watch mode             |
+| `npm start`            | Run the built CLI (`dist/cli.js`) |
+| `npm run lint`         | Lint with ESLint                  |
+| `npm run lint:fix`     | Lint and auto-fix                 |
+| `npm run format`       | Format with Prettier              |
+| `npm run format:check` | Check formatting without writing  |
+| `npm test`             | Run unit tests                    |
+| `npm run test:e2e`     | Build, then run end-to-end tests  |
+| `npm run test:watch`   | Run tests in watch mode           |
 
 ## Testing
 
@@ -47,7 +47,7 @@ npm run test:e2e
 You can also test the CLI manually against a throwaway home directory:
 
 ```bash
-HOME=$(mktemp -d) node dist/cli.js --init
+HOME=$(mktemp -d) node dist/cli.js init
 ```
 
 ## Releasing

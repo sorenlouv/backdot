@@ -2,7 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs } from "node:util";
+import cac from "cac";
 import chalk from "chalk";
 import { CONFIG_PATH } from "./config.js";
 import { backup } from "./commands/backup.js";
@@ -25,80 +25,50 @@ function getVersion(): string {
   }
 }
 
-function printHelp(): void {
-  console.log();
-  console.log("  Usage: backdot <command>");
-  console.log();
-  console.log("  Commands:");
-  console.log();
-  console.log("    --init                       Set up backdot for the first time");
-  console.log("    --backup                     Run a backup now");
-  console.log("    --restore [url]              Restore files from the backup repo");
-  console.log("    --restore [url] --commit <sha>  Restore from a specific backup commit");
-  console.log("    --restore [url] --yes (-y)      Accept defaults without prompting");
-  console.log("    --history [url]              Browse and restore a previous backup");
-  console.log("    --schedule                   Install daily backup schedule (macOS launchd)");
-  console.log("    --unschedule                 Remove the daily backup schedule");
-  console.log("    --status                     Show schedule and resolved files");
-  console.log("    --version                    Show version");
-  console.log();
-}
+const cli = cac("backdot");
+
+cli.command("init", "Set up backdot for the first time").action(() => init());
+
+cli.command("backup", "Run a backup now").action(async () => {
+  await backup();
+});
+
+cli
+  .command("restore [url]", "Restore files")
+  .option("--commit <sha>", "Restore from a specific backup commit")
+  .option("-y, --yes", "Accept defaults without prompting")
+  .action(async (url: string | undefined, options: { commit?: string; yes?: boolean }) => {
+    await restore({ repoUrl: url, commit: options.commit, yes: !!options.yes });
+  });
+
+cli
+  .command("history [url]", "List and restore a previous backup")
+  .action(async (url: string | undefined) => {
+    await history(url);
+  });
+
+cli.command("schedule", "Schedule daily backup").action(() => schedule());
+
+cli.command("unschedule", "Unschedule the daily backup").action(() => unschedule());
+
+cli.command("status", "Show the status of the backup").action(async () => {
+  await status();
+});
+
+cli.command("", "").action(() => {
+  cli.outputHelp();
+  if (!fs.existsSync(CONFIG_PATH)) {
+    console.log(`  No config found. Run ${chalk.bold("backdot init")} to get started.\n`);
+  }
+});
+
+cli.help();
+cli.version(getVersion());
 
 async function main(): Promise<void> {
-  let values: Record<string, string | boolean | undefined>;
-  let positionals: string[];
-
   try {
-    ({ values, positionals } = parseArgs({
-      args: process.argv.slice(2),
-      options: {
-        init: { type: "boolean" },
-        backup: { type: "boolean" },
-        restore: { type: "boolean" },
-        history: { type: "boolean" },
-        schedule: { type: "boolean" },
-        unschedule: { type: "boolean" },
-        status: { type: "boolean" },
-        version: { type: "boolean" },
-        help: { type: "boolean" },
-        commit: { type: "string" },
-        yes: { type: "boolean", short: "y" },
-      },
-      allowPositionals: true,
-      strict: true,
-    }));
-  } catch (err) {
-    console.error(`\n  Error: ${errorMessage(err)}\n`);
-    printHelp();
-    process.exit(1);
-  }
-
-  try {
-    if (values.init) {
-      init();
-    } else if (values.backup) {
-      await backup();
-    } else if (values.schedule) {
-      schedule();
-    } else if (values.unschedule) {
-      unschedule();
-    } else if (values.status) {
-      await status();
-    } else if (values.restore) {
-      await restore(positionals[0], values.commit as string | undefined, {
-        yes: !!values.yes,
-      });
-    } else if (values.history) {
-      await history(positionals[0]);
-    } else if (values.version) {
-      console.log(getVersion());
-    } else {
-      printHelp();
-      if (!fs.existsSync(CONFIG_PATH)) {
-        console.log(`  No config found. Run ${chalk.bold("backdot --init")} to get started.`);
-        console.log();
-      }
-    }
+    cli.parse(process.argv, { run: false });
+    await cli.runMatchedCommand();
   } catch (err) {
     const msg = errorMessage(err);
     logger.error(msg);

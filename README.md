@@ -10,7 +10,7 @@
 
 ```bash
 npm install -g backdot
-backdot --init
+backdot init
 ```
 
 This creates `~/.backdot.json` with sensible defaults and walks you through setup. Open the config file and set your repository URL and the files you want backed up:
@@ -26,13 +26,13 @@ This creates `~/.backdot.json` with sensible defaults and walks you through setu
 Run your first backup:
 
 ```bash
-backdot --backup
+backdot backup
 ```
 
 or configure the backport process to run automatically (daily at 2am)
 
 ```bash
-backdot --schedule
+backdot schedule
 ```
 
 ## Configuration
@@ -51,17 +51,17 @@ Prefix a pattern with `!` to exclude matching files:
 
 ## Commands
 
-| Command                          | Description                                    |
-| -------------------------------- | ---------------------------------------------- |
-| `--init`                         | Set up backdot for the first time              |
-| `--backup`                       | Run a backup now                               |
-| `--restore`                      | Restore latest backup from the configured repo |
-| `--restore <url>`                | Restore from a specific repo URL               |
-| `--restore [url] --commit <sha>` | Restore from a specific backup commit          |
-| `--history [url]`                | Browse and restore a previous backup           |
-| `--schedule`                     | Schedule automatic daily backup (Mac-only)     |
-| `--unschedule`                   | Unschedule the daily backup                    |
-| `--status`                       | Show schedule and resolved file list           |
+| Command                        | Description                                    |
+| ------------------------------ | ---------------------------------------------- |
+| `init`                         | Set up backdot for the first time              |
+| `backup`                       | Run a backup now                               |
+| `restore`                      | Restore latest backup from the configured repo |
+| `restore <url>`                | Restore from a specific repo URL               |
+| `restore [url] --commit <sha>` | Restore from a specific backup commit          |
+| `history [url]`                | Browse and restore a previous backup           |
+| `schedule`                     | Schedule automatic daily backup (Mac-only)     |
+| `unschedule`                   | Unschedule the daily backup                    |
+| `status`                       | Show schedule and resolved file list           |
 
 ## Development
 
