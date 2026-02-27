@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import os from "node:os";
 
 vi.mock("node:fs", () => ({
   default: {
@@ -33,7 +32,8 @@ describe("init", () => {
 
     const parsed = JSON.parse(content);
     expect(parsed.repository).toBe("git@github.com:USERNAME/backdot-backup.git");
-    expect(parsed.machine).toBe(os.hostname());
+    expect(parsed.machine).toBeTruthy();
+    expect(parsed.machine).not.toMatch(/\.(local|localdomain)$/);
     expect(parsed.paths).toEqual(["~/.zshrc", "~/.gitconfig"]);
   });
 

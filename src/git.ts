@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import pRetry from "p-retry";
-import { simpleGit, CleanOptions } from "simple-git";
+import { simpleGit, type SimpleGit, CleanOptions } from "simple-git";
 import { logger } from "./log.js";
-import { STAGING_DIR } from "./staging.js";
+import { STAGING_DIR, STAGING_GIT_DIR } from "./paths.js";
 import { getCommitUrl } from "./commitUrl.js";
+import { errorMessage, pluralize, uniq } from "./utils.js";
 
 interface FileChangeSummary {
   created: string[];
@@ -14,7 +15,7 @@ interface FileChangeSummary {
 }
 
 export function buildCommitMessage(changes: FileChangeSummary, maxLen = 250): string {
-  const unique = (paths: string[]) => [...new Set(paths.map((f) => path.basename(f)))];
+  const unique = (paths: string[]) => uniq(paths.map((f) => path.basename(f)));
 
   const removed = unique(changes.deleted);
   const added = unique(changes.created);
@@ -27,15 +28,14 @@ export function buildCommitMessage(changes: FileChangeSummary, maxLen = 250): st
   ].filter((c) => c.files.length > 0);
 
   if (categories.length === 0) {
-    return "backup";
+    return "backup"; // fallback commit message when no changes are categorized
   }
 
   function format(cat: (typeof categories)[number], listFiles: boolean): string {
     if (listFiles) {
       return `${cat.label}: ${cat.files.join(", ")}`;
     }
-    const n = cat.files.length;
-    return `${cat.label}: ${n} file${n !== 1 ? "s" : ""}`;
+    return `${cat.label}: ${pluralize(cat.files.length, "file")}`;
   }
 
   function build(listFlags: boolean[]): string {
@@ -44,46 +44,92 @@ export function buildCommitMessage(changes: FileChangeSummary, maxLen = 250): st
 
   const flags = categories.map(() => true);
   let msg = build(flags);
-  if (msg.length <= maxLen) return msg;
+  if (msg.length <= maxLen) {
+    return msg;
+  }
 
   for (const label of ["modified", "added", "removed"]) {
     const idx = categories.findIndex((c) => c.label === label);
     if (idx !== -1 && flags[idx]) {
       flags[idx] = false;
       msg = build(flags);
-      if (msg.length <= maxLen) return msg;
+      if (msg.length <= maxLen) {
+        return msg;
+      }
     }
   }
 
   return msg.slice(0, maxLen - 3) + "...";
 }
 
-export async function gitPull(repository: string, commit?: string): Promise<void> {
-  if (fs.existsSync(path.join(STAGING_DIR, ".git"))) {
-    const git = simpleGit(STAGING_DIR);
-    await git.fetch("origin");
-    const target = commit ?? `origin/${await git.revparse(["--abbrev-ref", "HEAD"])}`;
-    await git.reset(["--hard", target]);
-    await git.clean(CleanOptions.FORCE, ["-d"]);
-  } else {
-    try {
-      await simpleGit().clone(repository, STAGING_DIR);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes("empty")) {
-        throw err;
-      }
+export async function ensureRemoteUrl(repository: string): Promise<void> {
+  const git = simpleGit(STAGING_DIR);
+  const currentUrl = (await git.remote(["get-url", "origin"]))?.trim();
+  if (currentUrl !== repository) {
+    await git.remote(["set-url", "origin", repository]);
+  }
+}
 
-      fs.mkdirSync(STAGING_DIR, { recursive: true });
+export async function getCurrentBranch(git: SimpleGit): Promise<string> {
+  return (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
+}
+
+export function friendlyGitError(raw: string, repository: string): string {
+  const msg = raw.toLowerCase();
+  if (
+    msg.includes("not found") ||
+    msg.includes("does not exist") ||
+    msg.includes("does not appear to be a git repository")
+  ) {
+    return `Repository "${repository}" not found. Check the URL and that you have access.`;
+  }
+  if (msg.includes("authentication failed") || msg.includes("could not read username")) {
+    return `Authentication failed for "${repository}". Check your credentials or SSH key.`;
+  }
+  if (
+    msg.includes("could not resolve host") ||
+    msg.includes("connection refused") ||
+    msg.includes("connection timed out")
+  ) {
+    return "Could not connect to remote host. Check your internet connection.";
+  }
+  return raw;
+}
+
+export function gitError(err: unknown, repository: string): Error {
+  const raw = errorMessage(err);
+  return new Error(friendlyGitError(raw, repository), { cause: err });
+}
+
+export async function gitPull(repository: string, commit?: string): Promise<void> {
+  try {
+    if (fs.existsSync(STAGING_GIT_DIR)) {
       const git = simpleGit(STAGING_DIR);
-      await git.init();
-      await git.addRemote("origin", repository);
-    }
-    if (commit) {
-      const git = simpleGit(STAGING_DIR);
-      await git.reset(["--hard", commit]);
+      await ensureRemoteUrl(repository);
+      await git.fetch("origin");
+      const target = commit ?? `origin/${await getCurrentBranch(git)}`;
+      await git.reset(["--hard", target]);
       await git.clean(CleanOptions.FORCE, ["-d"]);
+    } else {
+      try {
+        await simpleGit().clone(repository, STAGING_DIR);
+      } catch (err) {
+        if (!errorMessage(err).includes("empty repository")) {
+          throw err;
+        }
+        fs.mkdirSync(STAGING_DIR, { recursive: true });
+        const git = simpleGit(STAGING_DIR);
+        await git.init();
+        await git.addRemote("origin", repository);
+      }
+      if (commit) {
+        const git = simpleGit(STAGING_DIR);
+        await git.reset(["--hard", commit]);
+        await git.clean(CleanOptions.FORCE, ["-d"]);
+      }
     }
+  } catch (err) {
+    throw gitError(err, repository);
   }
   logger.info("Synced staging directory from remote");
 }
@@ -114,20 +160,27 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } |
   const message = buildCommitMessage(status);
   await git.commit(message);
 
-  await pRetry(async () => git.push(["-u", "origin", "HEAD"]), {
-    retries: 5,
-    onFailedAttempt: async ({ attemptNumber, retriesLeft }) => {
-      logger.info(`Push failed (attempt ${attemptNumber}, ${retriesLeft} retries left), rebasing`);
-      await git.fetch("origin");
-      const branch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
-      try {
-        await git.rebase([`origin/${branch}`]);
-      } catch {
-        await git.rebase(["--abort"]);
-        throw new Error("Rebase conflict, aborting retry");
-      }
-    },
-  });
+  try {
+    await pRetry(async () => git.push(["-u", "origin", "HEAD"]), {
+      retries: 5,
+      onFailedAttempt: async ({ attemptNumber, retriesLeft }) => {
+        logger.info(
+          `Push failed (attempt ${attemptNumber}, ${retriesLeft} retries left), rebasing`,
+        );
+        await git.fetch("origin");
+        const branch = await getCurrentBranch(git);
+        try {
+          await git.rebase([`origin/${branch}`]);
+        } catch {
+          await git.rebase(["--abort"]);
+          throw new Error("Rebase conflict, aborting retry");
+        }
+      },
+    });
+  } catch (err) {
+    const remoteUrl = ((await git.remote(["get-url", "origin"])) ?? "").trim();
+    throw gitError(err, remoteUrl);
+  }
 
   logger.info(`Committed and pushed: ${message}`);
 

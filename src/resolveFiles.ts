@@ -2,14 +2,16 @@ import fs from "node:fs";
 import fg from "fast-glob";
 import { Config } from "./config.js";
 import { logger } from "./log.js";
+import { errorMessage, uniq } from "./utils.js";
 
 function resolveGlobs(patterns: string[]): string[] {
-  if (patterns.length === 0) return [];
+  if (patterns.length === 0) {
+    return [];
+  }
   try {
     return fg.sync(patterns, { absolute: true, dot: true, onlyFiles: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.warn(`Glob pattern resolution failed: ${msg}`);
+    logger.warn(`Glob pattern resolution failed: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -21,7 +23,7 @@ const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
  * Skips entries that fail resolution and logs warnings.
  */
 export function resolveFiles(config: Config): string[] {
-  const unique = [...new Set(resolveGlobs(config.paths))];
+  const unique = uniq(resolveGlobs(config.paths));
 
   return unique.filter((filePath) => {
     try {

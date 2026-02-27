@@ -7,7 +7,9 @@ const PROVIDERS: Record<string, (repoPath: string, sha: string) => string> = {
 export function getCommitUrl(remoteUrl: string, sha: string): string | null {
   for (const [host, buildUrl] of Object.entries(PROVIDERS)) {
     const idx = remoteUrl.indexOf(host);
-    if (idx === -1) continue;
+    if (idx === -1) {
+      continue;
+    }
 
     let repoPath = remoteUrl.slice(idx + host.length + 1).trim();
     if (repoPath.endsWith(".git")) {

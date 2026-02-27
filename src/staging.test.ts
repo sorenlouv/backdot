@@ -29,6 +29,17 @@ vi.mock("./log.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock("./git.js", async () => {
+  const actual = await vi.importActual<typeof import("./git.js")>("./git.js");
+  return {
+    ensureRemoteUrl: vi.fn().mockResolvedValue(undefined),
+    getCurrentBranch: vi.fn(async (git: { revparse: (args: string[]) => Promise<string> }) =>
+      (await git.revparse(["--abbrev-ref", "HEAD"])).trim(),
+    ),
+    gitError: actual.gitError,
+  };
+});
+
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import {
@@ -43,6 +54,7 @@ import {
 
 const HOME = os.homedir();
 const MACHINE = "sorens-work-laptop";
+const REPO = "https://github.com/sorenlouv/dotfiles-backup.git";
 
 describe("machineDir", () => {
   it("returns STAGING_DIR joined with the machine name", () => {
@@ -160,14 +172,14 @@ describe("compareFiles", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
 
-    const result = await compareFiles(files, MACHINE);
+    const result = await compareFiles(files, MACHINE, REPO);
 
     expect(result.error).toContain("Backup repository not found");
     expect(result.notBackedUp).toEqual([]);
   });
 
   it("returns empty result for empty file list", async () => {
-    const result = await compareFiles([], MACHINE);
+    const result = await compareFiles([], MACHINE, REPO);
 
     expect(result.notBackedUp).toEqual([]);
     expect(result.backedUp).toEqual([]);
@@ -192,7 +204,7 @@ describe("compareFiles", () => {
     });
 
     const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
-    const result = await compareFiles(files, MACHINE);
+    const result = await compareFiles(files, MACHINE, REPO);
 
     expect(result.backedUp).toEqual([`${HOME}/.zshrc`]);
     expect(result.modified).toEqual([`${HOME}/.npmrc`]);
@@ -206,12 +218,14 @@ describe("compareFiles", () => {
 
     vi.mocked(execFileSync).mockImplementation((_cmd, args) => {
       const a = args as string[];
-      if (a[0] === "ls-tree") return "";
+      if (a[0] === "ls-tree") {
+        return "";
+      }
       return "aaa111\n";
     });
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE);
+    const result = await compareFiles(files, MACHINE, REPO);
 
     expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
     expect(result.backedUp).toEqual([]);
@@ -228,7 +242,7 @@ describe("compareFiles", () => {
     });
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE);
+    const result = await compareFiles(files, MACHINE, REPO);
 
     expect(result.error).toContain("fatal: not a tree object");
   });
@@ -239,18 +253,30 @@ describe("compareFiles", () => {
     mockGit.revparse.mockRejectedValue(new Error("HEAD not found"));
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE);
+    const result = await compareFiles(files, MACHINE, REPO);
 
     expect(result.error).toContain("HEAD not found");
   });
 
-  it("returns error when fetch fails", async () => {
+  it("returns friendly error when fetch fails", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.fetch.mockRejectedValue(new Error("Could not resolve host"));
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE);
+    const result = await compareFiles(files, MACHINE, REPO);
 
-    expect(result.error).toContain("Could not resolve host");
+    expect(result.error).toBe("Could not connect to remote host. Check your internet connection.");
+  });
+
+  it("returns friendly error for not-found repository", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockGit.fetch.mockRejectedValue(new Error("remote: Repository not found."));
+
+    const files = [`${HOME}/.zshrc`];
+    const result = await compareFiles(files, MACHINE, REPO);
+
+    expect(result.error).toBe(
+      `Repository "${REPO}" not found. Check the URL and that you have access.`,
+    );
   });
 });

@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import ora from "ora";
 import { logger } from "./log.js";
+import { errorMessage } from "./utils.js";
 
 function escapeXml(s: string): string {
   return s
@@ -94,7 +95,7 @@ export function setupLaunchd(): void {
     console.log();
     logger.info("Launchd job loaded");
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     spinner.fail(`Failed to load launchd job: ${msg}`);
     console.log();
     logger.error(`Failed to load launchd job: ${msg}`);

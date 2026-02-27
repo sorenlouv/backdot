@@ -19,7 +19,7 @@ vi.mock("./log.js", () => ({
 
 import fs from "node:fs";
 import fg from "fast-glob";
-import { resolveFiles } from "./resolve.js";
+import { resolveFiles } from "./resolveFiles.js";
 
 const fileStatMock = { isFile: () => true, size: 1024 } as ReturnType<typeof fs.statSync>;
 const dirStatMock = { isFile: () => false, size: 0 } as ReturnType<typeof fs.statSync>;

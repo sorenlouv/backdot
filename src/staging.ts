@@ -4,13 +4,13 @@ import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { simpleGit } from "simple-git";
 import { logger } from "./log.js";
+import { errorMessage, pluralize } from "./utils.js";
+import { ensureRemoteUrl, getCurrentBranch, gitError } from "./git.js";
+import { STAGING_DIR, STAGING_GIT_DIR, machineDir } from "./paths.js";
+
+export { STAGING_DIR, STAGING_GIT_DIR, machineDir };
 
 const HOME = os.homedir();
-export const STAGING_DIR = path.join(HOME, ".backdot", "repo");
-
-export function machineDir(machine: string): string {
-  return path.join(STAGING_DIR, machine);
-}
 
 export function getStagedPath(filePath: string, machine: string): string {
   const rel = path.relative(HOME, filePath);
@@ -20,7 +20,9 @@ export function getStagedPath(filePath: string, machine: string): string {
 
 export function cleanStaging(machine: string): void {
   const dir = machineDir(machine);
-  if (!fs.existsSync(dir)) return;
+  if (!fs.existsSync(dir)) {
+    return;
+  }
 
   fs.rmSync(dir, { recursive: true, force: true });
   logger.info(`Cleaned staging directory for machine "${machine}"`);
@@ -43,7 +45,7 @@ export function copyToStaging(files: string[], machine: string): void {
     }
   }
 
-  logger.info(`Copied ${copied} file(s) to staging`);
+  logger.info(`Copied ${pluralize(copied, "file")} to staging`);
 }
 
 export interface ComparisonResult {
@@ -54,15 +56,19 @@ export interface ComparisonResult {
 }
 
 function failedComparisonResult(err: unknown): ComparisonResult {
-  const errorMessage = err instanceof Error ? err.message : String(err);
-  return { backedUp: [], modified: [], notBackedUp: [], error: errorMessage };
+  return { backedUp: [], modified: [], notBackedUp: [], error: errorMessage(err) };
 }
 
-export async function compareFiles(files: string[], machine: string): Promise<ComparisonResult> {
-  if (files.length === 0) return { backedUp: [], modified: [], notBackedUp: [] };
+export async function compareFiles(
+  files: string[],
+  machine: string,
+  repository: string,
+): Promise<ComparisonResult> {
+  if (files.length === 0) {
+    return { backedUp: [], modified: [], notBackedUp: [] };
+  }
 
-  const gitDir = path.join(STAGING_DIR, ".git");
-  if (!fs.existsSync(gitDir)) {
+  if (!fs.existsSync(STAGING_GIT_DIR)) {
     return failedComparisonResult(
       new Error("Backup repository not found. Run backdot --backup first."),
     );
@@ -71,14 +77,15 @@ export async function compareFiles(files: string[], machine: string): Promise<Co
   const git = simpleGit(STAGING_DIR);
 
   try {
+    await ensureRemoteUrl(repository);
     await git.fetch("origin");
   } catch (err) {
-    return failedComparisonResult(err);
+    return failedComparisonResult(gitError(err, repository));
   }
 
   let branch: string;
   try {
-    branch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
+    branch = await getCurrentBranch(git);
   } catch (err) {
     return failedComparisonResult(err);
   }

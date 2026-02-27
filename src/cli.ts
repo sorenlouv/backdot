@@ -12,6 +12,7 @@ import { restore } from "./commands/restore.js";
 import { history } from "./commands/history.js";
 import { init } from "./commands/init.js";
 import { logger } from "./log.js";
+import { errorMessage } from "./utils.js";
 import { sendNotification } from "./notify.js";
 
 function getVersion(): string {
@@ -67,8 +68,7 @@ async function main(): Promise<void> {
       strict: true,
     }));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`\n  Error: ${msg}\n`);
+    console.error(`\n  Error: ${errorMessage(err)}\n`);
     printHelp();
     process.exit(1);
   }
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
       }
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     logger.error(msg);
     console.error(`\n  Error: ${msg}\n`);
     if (!process.stdout.isTTY) {

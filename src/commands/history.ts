@@ -11,8 +11,14 @@ export async function history(repoUrl?: string): Promise<void> {
   const repository = repoUrl ?? loadConfig().repository;
 
   const spinner = ora("Fetching backup history").start();
-  await gitPull(repository);
-  const commits = await gitLog();
+  let commits;
+  try {
+    await gitPull(repository);
+    commits = await gitLog();
+  } catch (err) {
+    spinner.fail("Failed to fetch backup history");
+    throw err;
+  }
   spinner.stop();
 
   if (commits.length === 0) {

@@ -1,11 +1,27 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import chalk from "chalk";
 import { CONFIG_PATH } from "../config.js";
 
+function getMachineName(): string {
+  if (process.platform === "darwin") {
+    try {
+      return execFileSync("scutil", ["--get", "LocalHostName"], {
+        encoding: "utf-8",
+        stdio: "pipe",
+      }).trim();
+    } catch {
+      // fall through
+    }
+  }
+
+  return os.hostname().replace(/\.(local|localdomain)$/, "");
+}
+
 const TEMPLATE = {
   repository: "git@github.com:USERNAME/backdot-backup.git",
-  machine: os.hostname(),
+  machine: getMachineName(),
   paths: ["~/.zshrc", "~/.gitconfig"],
 };
 

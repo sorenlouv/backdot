@@ -7,6 +7,7 @@ import { loadConfig } from "../config.js";
 import { gitPull } from "../git.js";
 import { STAGING_DIR, machineDir } from "../staging.js";
 import { logger } from "../log.js";
+import { pluralize } from "../utils.js";
 
 const HOME = os.homedir();
 
@@ -21,7 +22,9 @@ function walkDir(dir: string): string[] {
 }
 
 function listMachines(): string[] {
-  if (!fs.existsSync(STAGING_DIR)) return [];
+  if (!fs.existsSync(STAGING_DIR)) {
+    return [];
+  }
   return fs
     .readdirSync(STAGING_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory() && e.name !== ".git")
@@ -104,7 +107,7 @@ export async function restore(
   }
 
   const stagedFiles = walkDir(baseDir);
-  logger.info(`Found ${stagedFiles.length} file(s) in backup repository`);
+  logger.info(`Found ${pluralize(stagedFiles.length, "file")} in backup repository`);
 
   if (stagedFiles.length === 0) {
     spinner.stop();
@@ -132,7 +135,7 @@ export async function restore(
     toRestore = fresh;
     if (existing.length > 0) {
       console.log(
-        `  Skipped ${existing.length} existing file(s). Run without --yes to select them.`,
+        `  Skipped ${pluralize(existing.length, "existing file")}. Run without --yes to select them.`,
       );
       console.log();
     }
@@ -171,8 +174,8 @@ export async function restore(
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(src, dest);
   }
-  copySpinner.succeed(`Restored ${toRestore.length} file(s)`);
+  copySpinner.succeed(`Restored ${pluralize(toRestore.length, "file")}`);
   console.log();
 
-  logger.info(`Restored ${toRestore.length} file(s)`);
+  logger.info(`Restored ${pluralize(toRestore.length, "file")}`);
 }

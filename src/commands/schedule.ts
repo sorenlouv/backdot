@@ -1,4 +1,4 @@
-import { setupLaunchd, uninstallLaunchd } from "../plist.js";
+import { setupLaunchd, uninstallLaunchd } from "../launchd.js";
 
 function requireMacOS(): void {
   if (process.platform !== "darwin") {

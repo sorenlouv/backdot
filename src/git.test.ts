@@ -14,6 +14,7 @@ const mockGit = {
   clean: vi.fn().mockResolvedValue(undefined),
   clone: vi.fn().mockResolvedValue(undefined),
   remote: vi.fn().mockResolvedValue("git@github.com:user/repo.git"),
+  rebase: vi.fn().mockResolvedValue(undefined),
   log: vi.fn().mockResolvedValue({ all: [] }),
 };
 
@@ -33,12 +34,130 @@ vi.mock("./log.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock("./staging.js", () => ({
+vi.mock("./paths.js", () => ({
   STAGING_DIR: "/mock/staging",
+  STAGING_GIT_DIR: "/mock/staging/.git",
 }));
 
 import fs from "node:fs";
-import { gitPull, gitCommitAndPush, gitLog, buildCommitMessage } from "./git.js";
+import {
+  gitPull,
+  gitCommitAndPush,
+  gitLog,
+  buildCommitMessage,
+  ensureRemoteUrl,
+  friendlyGitError,
+  gitError,
+} from "./git.js";
+
+describe("ensureRemoteUrl", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("does nothing when URL already matches", async () => {
+    mockGit.remote.mockResolvedValue("git@github.com:test/repo.git\n");
+
+    await ensureRemoteUrl("git@github.com:test/repo.git");
+
+    expect(mockGit.remote).toHaveBeenCalledWith(["get-url", "origin"]);
+    expect(mockGit.remote).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates remote URL when it differs", async () => {
+    mockGit.remote.mockResolvedValueOnce("git@github.com:old/repo.git\n");
+    mockGit.remote.mockResolvedValueOnce(undefined);
+
+    await ensureRemoteUrl("git@github.com:new/repo.git");
+
+    expect(mockGit.remote).toHaveBeenCalledWith(["get-url", "origin"]);
+    expect(mockGit.remote).toHaveBeenCalledWith([
+      "set-url",
+      "origin",
+      "git@github.com:new/repo.git",
+    ]);
+  });
+});
+
+describe("friendlyGitError", () => {
+  const repo = "git@github.com:test/repo.git";
+
+  it("returns friendly message for repository not found", () => {
+    const raw =
+      "remote: Repository not found.\nfatal: repository 'https://github.com/test/repo/' not found";
+    expect(friendlyGitError(raw, repo)).toBe(
+      `Repository "${repo}" not found. Check the URL and that you have access.`,
+    );
+  });
+
+  it("returns friendly message for authentication failure", () => {
+    expect(friendlyGitError("Authentication failed for 'https://github.com/x/y.git'", repo)).toBe(
+      `Authentication failed for "${repo}". Check your credentials or SSH key.`,
+    );
+  });
+
+  it("returns friendly message for username prompt failure", () => {
+    expect(
+      friendlyGitError(
+        "could not read Username for 'https://github.com': terminal prompts disabled",
+        repo,
+      ),
+    ).toBe(`Authentication failed for "${repo}". Check your credentials or SSH key.`);
+  });
+
+  it("returns friendly message for host resolution failure", () => {
+    expect(
+      friendlyGitError("fatal: unable to access: Could not resolve host: github.com", repo),
+    ).toBe("Could not connect to remote host. Check your internet connection.");
+  });
+
+  it("returns friendly message for connection refused", () => {
+    expect(friendlyGitError("Failed to connect: Connection refused", repo)).toBe(
+      "Could not connect to remote host. Check your internet connection.",
+    );
+  });
+
+  it("returns friendly message for connection timed out", () => {
+    expect(friendlyGitError("Connection timed out", repo)).toBe(
+      "Could not connect to remote host. Check your internet connection.",
+    );
+  });
+
+  it("returns friendly message for local repo 'does not exist'", () => {
+    expect(friendlyGitError("fatal: repository '/tmp/fake.git' does not exist", repo)).toBe(
+      `Repository "${repo}" not found. Check the URL and that you have access.`,
+    );
+  });
+
+  it("returns friendly message for 'does not appear to be a git repository'", () => {
+    expect(
+      friendlyGitError("fatal: '/tmp/fake.git' does not appear to be a git repository", repo),
+    ).toBe(`Repository "${repo}" not found. Check the URL and that you have access.`);
+  });
+
+  it("passes through unknown errors unchanged", () => {
+    const raw = "some unexpected git error";
+    expect(friendlyGitError(raw, repo)).toBe(raw);
+  });
+});
+
+describe("gitError", () => {
+  it("wraps an Error with a friendly message and preserves cause", () => {
+    const original = new Error("remote: Repository not found.");
+    const wrapped = gitError(original, "git@github.com:test/repo.git");
+    expect(wrapped.message).toBe(
+      'Repository "git@github.com:test/repo.git" not found. Check the URL and that you have access.',
+    );
+    expect(wrapped.cause).toBe(original);
+  });
+
+  it("handles non-Error values", () => {
+    const wrapped = gitError("Connection refused", "git@github.com:test/repo.git");
+    expect(wrapped.message).toBe(
+      "Could not connect to remote host. Check your internet connection.",
+    );
+  });
+});
 
 describe("gitPull", () => {
   beforeEach(() => {
@@ -50,6 +169,7 @@ describe("gitPull", () => {
     mockGit.clone.mockResolvedValue(undefined);
     mockGit.init.mockResolvedValue(undefined);
     mockGit.addRemote.mockResolvedValue(undefined);
+    mockGit.remote.mockResolvedValue("git@github.com:test/repo.git\n");
   });
 
   it("fetches and hard resets when .git exists", async () => {
@@ -81,13 +201,26 @@ describe("gitPull", () => {
     expect(mockGit.addRemote).toHaveBeenCalledWith("origin", "git@github.com:test/repo.git");
   });
 
-  it("re-throws non-empty-repo clone errors", async () => {
+  it("re-throws non-empty-repo clone errors with friendly message", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     mockGit.clone.mockRejectedValue(new Error("Could not resolve host: github.com"));
 
-    await expect(gitPull("git@github.com:test/repo.git")).rejects.toThrow("Could not resolve host");
+    await expect(gitPull("git@github.com:test/repo.git")).rejects.toThrow(
+      "Could not connect to remote host. Check your internet connection.",
+    );
 
     expect(mockGit.init).not.toHaveBeenCalled();
+  });
+
+  it("re-throws fetch errors with friendly message when .git exists", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    mockGit.fetch.mockRejectedValue(
+      new Error("remote: Repository not found.\nfatal: repository not found"),
+    );
+
+    await expect(gitPull("git@github.com:test/repo.git")).rejects.toThrow(
+      'Repository "git@github.com:test/repo.git" not found. Check the URL and that you have access.',
+    );
   });
 
   it("resets to a specific commit when commit parameter is provided", async () => {
@@ -166,6 +299,17 @@ describe("gitCommitAndPush", () => {
     const result = await gitCommitAndPush();
 
     expect(result).toEqual({ commitUrl: null });
+  });
+
+  it("wraps push errors with friendly message", async () => {
+    mockGit.status.mockResolvedValue(dirtyStatus);
+    const notFoundError = new Error("remote: Repository not found.\nfatal: repository not found");
+    mockGit.push.mockRejectedValue(notFoundError);
+    mockGit.fetch.mockRejectedValue(notFoundError);
+
+    await expect(gitCommitAndPush()).rejects.toThrow(
+      'Repository "git@github.com:user/repo.git" not found. Check the URL and that you have access.',
+    );
   });
 });
 

@@ -19,7 +19,7 @@ vi.mock("./log.js", () => ({
 
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import { isScheduled } from "./plist.js";
+import { isScheduled } from "./launchd.js";
 
 describe("isScheduled", () => {
   beforeEach(() => {

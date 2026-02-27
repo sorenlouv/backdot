@@ -2,9 +2,10 @@ import os from "node:os";
 import chalk from "chalk";
 import ora from "ora";
 import { loadConfig, CONFIG_PATH } from "../config.js";
-import { resolveFiles } from "../resolve.js";
+import { resolveFiles } from "../resolveFiles.js";
 import { compareFiles } from "../staging.js";
-import { isScheduled } from "../plist.js";
+import { isScheduled } from "../launchd.js";
+import { pluralize } from "../utils.js";
 
 function tildePath(filePath: string): string {
   const home = os.homedir();
@@ -14,7 +15,9 @@ function tildePath(filePath: string): string {
 export async function status(): Promise<void> {
   const scheduled = isScheduled();
   console.log();
-  console.log(`  Schedule:  ${scheduled ? "active (daily at 02:00)" : "not active"}`);
+  console.log(
+    `  Schedule:  ${scheduled ? "active (daily at 02:00)" : `not active  (run ${chalk.bold("backdot --schedule")} to enable)`}`,
+  );
 
   const config = loadConfig();
   console.log(`  Repo:      ${config.repository}`);
@@ -34,7 +37,11 @@ export async function status(): Promise<void> {
     const files = [...userFiles, CONFIG_PATH];
 
     spinner.text = "Comparing with remote backup";
-    const { backedUp, modified, notBackedUp, error } = await compareFiles(files, config.machine);
+    const { backedUp, modified, notBackedUp, error } = await compareFiles(
+      files,
+      config.machine,
+      config.repository,
+    );
     spinner.stop();
 
     if (error) {
@@ -43,7 +50,7 @@ export async function status(): Promise<void> {
     }
 
     if (modified.length === 0 && notBackedUp.length === 0) {
-      console.log(chalk.green(`  All ${files.length} file(s) are backed up ✓`));
+      console.log(chalk.green(`  All ${pluralize(files.length, "file")} are backed up ✓`));
     } else {
       if (modified.length > 0) {
         console.log(chalk.yellow(`  Modified since last backup (${modified.length}):`));

@@ -1,9 +1,10 @@
 import ora from "ora";
 import { loadConfig, CONFIG_PATH } from "../config.js";
-import { resolveFiles } from "../resolve.js";
+import { resolveFiles } from "../resolveFiles.js";
 import { cleanStaging, copyToStaging, writeRepoReadme } from "../staging.js";
 import { gitPull, gitCommitAndPush } from "../git.js";
 import { logger } from "../log.js";
+import { pluralize } from "../utils.js";
 
 export async function backup(): Promise<void> {
   logger.info("Starting backup");
@@ -14,7 +15,7 @@ export async function backup(): Promise<void> {
   const spinner = ora("Resolving files").start();
   try {
     const userFiles = resolveFiles(config);
-    logger.info(`Resolved ${userFiles.length} file(s)`);
+    logger.info(`Resolved ${pluralize(userFiles.length, "file")}`);
 
     if (userFiles.length === 0) {
       spinner.info("No files resolved, nothing to back up");
@@ -26,7 +27,7 @@ export async function backup(): Promise<void> {
     spinner.text = "Syncing with remote";
     await gitPull(config.repository);
 
-    spinner.text = `Copying ${files.length} file(s) to staging`;
+    spinner.text = `Copying ${pluralize(files.length, "file")} to staging`;
     cleanStaging(config.machine);
     copyToStaging(files, config.machine);
     writeRepoReadme(config.repository);
