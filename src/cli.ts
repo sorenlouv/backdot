@@ -34,6 +34,7 @@ function printHelp(): void {
   console.log("    --backup                     Run a backup now");
   console.log("    --restore [url]              Restore files from the backup repo");
   console.log("    --restore [url] --commit <sha>  Restore from a specific backup commit");
+  console.log("    --restore [url] --yes (-y)      Accept defaults without prompting");
   console.log("    --history [url]              Browse and restore a previous backup");
   console.log("    --schedule                   Install daily backup schedule (macOS launchd)");
   console.log("    --unschedule                 Remove the daily backup schedule");
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
         version: { type: "boolean" },
         help: { type: "boolean" },
         commit: { type: "string" },
+        yes: { type: "boolean", short: "y" },
       },
       allowPositionals: true,
       strict: true,
@@ -83,7 +85,9 @@ async function main(): Promise<void> {
     } else if (values.status) {
       await status();
     } else if (values.restore) {
-      await restore(positionals[0], values.commit as string | undefined);
+      await restore(positionals[0], values.commit as string | undefined, {
+        yes: !!values.yes,
+      });
     } else if (values.history) {
       await history(positionals[0]);
     } else if (values.version) {

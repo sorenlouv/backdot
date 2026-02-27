@@ -184,7 +184,7 @@ describe("backdot e2e", () => {
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
     fs.unlinkSync(path.join(tempDir, ".backdot.json"));
 
-    const output = run(["--restore", remoteRepo], env);
+    const output = run(["--restore", remoteRepo, "--yes"], env);
     expect(output).toContain("Restored");
 
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(MODIFIED_ZSHRC);
@@ -206,7 +206,7 @@ describe("backdot e2e", () => {
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
     fs.unlinkSync(path.join(tempDir, ".backdot.json"));
 
-    const output = run(["--restore", remoteRepo, "--commit", firstCommitSha], env);
+    const output = run(["--restore", remoteRepo, "--commit", firstCommitSha, "--yes"], env);
     expect(output).toContain("Restored");
 
     // The first commit had the original ZSHRC_CONTENT, not the MODIFIED_ZSHRC

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import ora from "ora";
-import { checkbox, select } from "@inquirer/prompts";
+import { checkbox, select, Separator } from "@inquirer/prompts";
 import { loadConfig } from "../config.js";
 import { gitPull } from "../git.js";
 import { STAGING_DIR, machineDir } from "../staging.js";
@@ -60,7 +60,15 @@ async function resolveRepoAndMachine(
   return { repository: repoUrl, machine };
 }
 
-export async function restore(repoUrl?: string, commit?: string): Promise<void> {
+interface RestoreOptions {
+  yes?: boolean;
+}
+
+export async function restore(
+  repoUrl?: string,
+  commit?: string,
+  options: RestoreOptions = {},
+): Promise<void> {
   logger.info("Starting restore");
 
   const { repository, machine } = await resolveRepoAndMachine(repoUrl, commit);
@@ -106,28 +114,34 @@ export async function restore(repoUrl?: string, commit?: string): Promise<void> 
   spinner.stop();
   console.log();
 
-  if (fresh.length > 0) {
-    console.log(`${fresh.length} new file(s) to restore:`);
-    console.log();
-    for (const f of fresh) {
-      console.log(`  ${f.rel}`);
+  type FileMapping = (typeof fileMappings)[number];
+
+  let toRestore: FileMapping[];
+
+  if (options.yes) {
+    toRestore = fresh;
+  } else {
+    const choices: Array<{ name: string; value: FileMapping; checked: boolean } | Separator> = [];
+
+    if (fresh.length > 0) {
+      choices.push(new Separator(`── New files (${fresh.length}) ──`));
+      for (const f of fresh) {
+        choices.push({ name: f.rel, value: f, checked: true });
+      }
     }
-    console.log();
-  }
 
-  let toRestore = fresh;
+    if (existing.length > 0) {
+      choices.push(new Separator(`── Existing files — will overwrite (${existing.length}) ──`));
+      for (const f of existing) {
+        choices.push({ name: f.rel, value: f, checked: false });
+      }
+    }
 
-  if (existing.length > 0) {
-    const selected = await checkbox({
-      message: `${existing.length} file(s) already exist. Select which to overwrite:`,
+    toRestore = await checkbox({
+      message: "Select files to restore:",
       loop: false,
-      choices: existing.map((f) => ({
-        name: f.rel,
-        value: f,
-        checked: true,
-      })),
+      choices,
     });
-    toRestore = [...fresh, ...selected];
     console.log();
   }
 

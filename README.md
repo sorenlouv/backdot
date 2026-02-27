@@ -57,6 +57,7 @@ Prefix a pattern with `!` to exclude matching files:
 | `--backup`                       | Run a backup now                                       |
 | `--restore [url]`                | Restore files to their original locations              |
 | `--restore [url] --commit <sha>` | Restore from a specific backup commit                  |
+| `--restore [url] --yes (-y)`     | Accept defaults without prompting                      |
 | `--history [url]`                | Browse and restore a previous backup                   |
 | `--schedule`                     | Schedule automatic daily backup via launchd (Mac-only) |
 | `--unschedule`                   | Remove the daily schedule                              |
