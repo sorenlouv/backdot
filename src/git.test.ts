@@ -81,6 +81,15 @@ describe("gitPull", () => {
     expect(mockGit.addRemote).toHaveBeenCalledWith("origin", "git@github.com:test/repo.git");
   });
 
+  it("re-throws non-empty-repo clone errors", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    mockGit.clone.mockRejectedValue(new Error("Could not resolve host: github.com"));
+
+    await expect(gitPull("git@github.com:test/repo.git")).rejects.toThrow("Could not resolve host");
+
+    expect(mockGit.init).not.toHaveBeenCalled();
+  });
+
   it("resets to a specific commit when commit parameter is provided", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
 

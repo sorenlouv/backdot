@@ -68,7 +68,12 @@ export async function gitPull(repository: string, commit?: string): Promise<void
   } else {
     try {
       await simpleGit().clone(repository, STAGING_DIR);
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("empty")) {
+        throw err;
+      }
+
       fs.mkdirSync(STAGING_DIR, { recursive: true });
       const git = simpleGit(STAGING_DIR);
       await git.init();

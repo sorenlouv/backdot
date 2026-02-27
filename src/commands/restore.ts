@@ -38,7 +38,12 @@ async function resolveRepoAndMachine(
   }
 
   const spinner = ora("Cloning backup repository").start();
-  await gitPull(repoUrl, commit);
+  try {
+    await gitPull(repoUrl, commit);
+  } catch (err) {
+    spinner.fail("Failed to clone backup repository");
+    throw err;
+  }
   spinner.stop();
 
   const machines = listMachines();
@@ -76,8 +81,13 @@ export async function restore(
   const spinner = ora("Fetching latest backup").start();
   const baseDir = machineDir(machine);
 
-  if (!repoUrl) {
-    await gitPull(repository, commit);
+  try {
+    if (!repoUrl) {
+      await gitPull(repository, commit);
+    }
+  } catch (err) {
+    spinner.fail("Failed to fetch latest backup");
+    throw err;
   }
   spinner.text = "Resolving files";
 
@@ -120,6 +130,12 @@ export async function restore(
 
   if (options.yes) {
     toRestore = fresh;
+    if (existing.length > 0) {
+      console.log(
+        `  Skipped ${existing.length} existing file(s). Run without --yes to select them.`,
+      );
+      console.log();
+    }
   } else {
     const choices: Array<{ name: string; value: FileMapping; checked: boolean } | Separator> = [];
 

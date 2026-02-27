@@ -5,6 +5,14 @@ import os from "node:os";
 import ora from "ora";
 import { logger } from "./log.js";
 
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 const LABEL = "com.backdot.daemon";
 const PLIST_PATH = path.join(os.homedir(), "Library", "LaunchAgents", `${LABEL}.plist`);
 
@@ -27,12 +35,12 @@ function buildPlist(): string {
   <string>${LABEL}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${nodePath}</string>
-    <string>${scriptPath}</string>
+    <string>${escapeXml(nodePath)}</string>
+    <string>${escapeXml(scriptPath)}</string>
     <string>--backup</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>${workingDir}</string>
+  <string>${escapeXml(workingDir)}</string>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
@@ -41,9 +49,9 @@ function buildPlist(): string {
     <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>${logPath}</string>
+  <string>${escapeXml(logPath)}</string>
   <key>StandardErrorPath</key>
-  <string>${logPath}</string>
+  <string>${escapeXml(logPath)}</string>
   <key>RunAtLoad</key>
   <false/>
 </dict>

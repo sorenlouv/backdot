@@ -102,8 +102,9 @@ export async function compareFiles(files: string[], machine: string): Promise<Co
 
   let sourceHashes: string[];
   try {
-    const hashOutput = execFileSync("git", ["hash-object", "--", ...files], {
+    const hashOutput = execFileSync("git", ["hash-object", "--stdin-paths"], {
       encoding: "utf-8",
+      input: files.join("\n") + "\n",
     });
     sourceHashes = hashOutput.trim().split("\n");
   } catch (err) {

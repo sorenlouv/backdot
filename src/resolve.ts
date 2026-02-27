@@ -7,8 +7,9 @@ function resolveGlobs(patterns: string[]): string[] {
   if (patterns.length === 0) return [];
   try {
     return fg.sync(patterns, { absolute: true, dot: true, onlyFiles: true });
-  } catch {
-    logger.warn("Glob pattern resolution failed");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(`Glob pattern resolution failed: ${msg}`);
     return [];
   }
 }
