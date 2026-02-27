@@ -140,7 +140,7 @@ export async function compareFiles(
 function repoReadme(repository: string): string {
   return `# Backdot Backup
 
-This repository contains dotfiles backed up automatically using [backdot](https://github.com/sorenlouv/backdot).
+This repository contains files backed up automatically using [backdot](https://github.com/sorenlouv/backdot).
 
 ## Restore
 
