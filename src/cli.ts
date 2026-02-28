@@ -62,6 +62,7 @@ cli.command("", "").action(() => {
   }
 });
 
+// cac auto-adds a --help flag; remove its redundant section from help output
 cli.help((sections) => sections.filter((s) => !s.body?.includes("--help")));
 cli.version(getVersion());
 
@@ -73,7 +74,8 @@ async function main(): Promise<void> {
     const msg = errorMessage(err);
     logger.error(msg);
     console.error(`\n  Error: ${msg}\n`);
-    if (!process.stdout.isTTY) {
+    const isRunningInBackground = !process.stdout.isTTY;
+    if (isRunningInBackground) {
       sendNotification("Backdot", `Backup failed: ${msg}`);
     }
     process.exit(1);

@@ -14,52 +14,55 @@ interface FileChangeSummary {
   renamed: Array<{ from: string; to: string }>;
 }
 
-export function buildCommitMessage(changes: FileChangeSummary, maxLen = 250): string {
-  const unique = (paths: string[]) => uniq(paths.map((f) => path.basename(f)));
+export function buildCommitMessage(changes: FileChangeSummary, maxLength = 250): string {
+  const uniqueBasenames = (paths: string[]) =>
+    uniq(paths.map((filePath) => path.basename(filePath)));
 
-  const removed = unique(changes.deleted);
-  const added = unique(changes.created);
-  const modified = unique([...changes.modified, ...changes.renamed.map((r) => r.to)]);
+  const removed = uniqueBasenames(changes.deleted);
+  const added = uniqueBasenames(changes.created);
+  const modified = uniqueBasenames([...changes.modified, ...changes.renamed.map((r) => r.to)]);
 
   const categories = [
     { label: "removed", files: removed },
     { label: "added", files: added },
     { label: "modified", files: modified },
-  ].filter((c) => c.files.length > 0);
+  ].filter((category) => category.files.length > 0);
 
   if (categories.length === 0) {
-    return "backup"; // fallback commit message when no changes are categorized
+    return "backup";
   }
 
-  function format(cat: (typeof categories)[number], listFiles: boolean): string {
+  function formatCategory(category: (typeof categories)[number], listFiles: boolean): string {
     if (listFiles) {
-      return `${cat.label}: ${cat.files.join(", ")}`;
+      return `${category.label}: ${category.files.join(", ")}`;
     }
-    return `${cat.label}: ${pluralize(cat.files.length, "file")}`;
+    return `${category.label}: ${pluralize(category.files.length, "file")}`;
   }
 
-  function build(listFlags: boolean[]): string {
-    return categories.map((cat, i) => format(cat, listFlags[i])).join("; ");
+  function joinCategories(showFileNames: boolean[]): string {
+    return categories.map((category, i) => formatCategory(category, showFileNames[i])).join("; ");
   }
 
-  const flags = categories.map(() => true);
-  let msg = build(flags);
-  if (msg.length <= maxLen) {
-    return msg;
+  // If the message exceeds maxLength, progressively replace file lists with
+  // counts, starting with the least important category.
+  const showFileNames = categories.map(() => true);
+  let message = joinCategories(showFileNames);
+  if (message.length <= maxLength) {
+    return message;
   }
 
   for (const label of ["modified", "added", "removed"]) {
-    const idx = categories.findIndex((c) => c.label === label);
-    if (idx !== -1 && flags[idx]) {
-      flags[idx] = false;
-      msg = build(flags);
-      if (msg.length <= maxLen) {
-        return msg;
+    const idx = categories.findIndex((category) => category.label === label);
+    if (idx !== -1 && showFileNames[idx]) {
+      showFileNames[idx] = false;
+      message = joinCategories(showFileNames);
+      if (message.length <= maxLength) {
+        return message;
       }
     }
   }
 
-  return msg.slice(0, maxLen - 3) + "...";
+  return message.slice(0, maxLength - 3) + "...";
 }
 
 export async function ensureRemoteUrl(repository: string): Promise<void> {
@@ -75,21 +78,24 @@ export async function getCurrentBranch(git: SimpleGit): Promise<string> {
 }
 
 export function friendlyGitError(raw: string, repository: string): string {
-  const msg = raw.toLowerCase();
+  const normalizedMessage = raw.toLowerCase();
   if (
-    msg.includes("not found") ||
-    msg.includes("does not exist") ||
-    msg.includes("does not appear to be a git repository")
+    normalizedMessage.includes("not found") ||
+    normalizedMessage.includes("does not exist") ||
+    normalizedMessage.includes("does not appear to be a git repository")
   ) {
     return `Repository "${repository}" not found. Check the URL and that you have access.`;
   }
-  if (msg.includes("authentication failed") || msg.includes("could not read username")) {
+  if (
+    normalizedMessage.includes("authentication failed") ||
+    normalizedMessage.includes("could not read username")
+  ) {
     return `Authentication failed for "${repository}". Check your credentials or SSH key.`;
   }
   if (
-    msg.includes("could not resolve host") ||
-    msg.includes("connection refused") ||
-    msg.includes("connection timed out")
+    normalizedMessage.includes("could not resolve host") ||
+    normalizedMessage.includes("connection refused") ||
+    normalizedMessage.includes("connection timed out")
   ) {
     return "Could not connect to remote host. Check your internet connection.";
   }
@@ -107,8 +113,8 @@ export async function gitPull(repository: string, commit?: string): Promise<void
       const git = simpleGit(STAGING_DIR);
       await ensureRemoteUrl(repository);
       await git.fetch("origin");
-      const target = commit ?? `origin/${await getCurrentBranch(git)}`;
-      await git.reset(["--hard", target]);
+      const resetTarget = commit ?? `origin/${await getCurrentBranch(git)}`;
+      await git.reset(["--hard", resetTarget]);
       await git.clean(CleanOptions.FORCE, ["-d"]);
     } else {
       try {
@@ -184,8 +190,8 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } |
 
   logger.info(`Committed and pushed: ${message}`);
 
-  const sha = (await git.revparse(["HEAD"])).trim();
+  const commitHash = (await git.revparse(["HEAD"])).trim();
   const remoteUrl = (await git.remote(["get-url", "origin"])) ?? "";
-  const commitUrl = getCommitUrl(remoteUrl, sha);
+  const commitUrl = getCommitUrl(remoteUrl, commitHash);
   return { commitUrl };
 }

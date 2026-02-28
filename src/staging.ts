@@ -14,50 +14,52 @@ export { STAGING_DIR, STAGING_GIT_DIR, machineDir };
 const HOME = os.homedir();
 
 export function getStagedPath(filePath: string, machine: string): string {
-  const rel = path.relative(HOME, filePath);
-  const destRel = rel.startsWith("..") ? filePath.slice(1) : rel;
-  return path.join(machineDir(machine), destRel);
+  const relativePath = path.relative(HOME, filePath);
+  // Files outside HOME (e.g. /etc/foo) produce a relative path starting with "..",
+  // which would escape the machine dir. Use the absolute path minus the leading "/" instead.
+  const pathWithinMachineDir = relativePath.startsWith("..") ? filePath.slice(1) : relativePath;
+  return path.join(machineDir(machine), pathWithinMachineDir);
 }
 
 export function cleanStaging(machine: string): void {
-  const dir = machineDir(machine);
-  if (!fs.existsSync(dir)) {
+  const machineStagingDir = machineDir(machine);
+  if (!fs.existsSync(machineStagingDir)) {
     return;
   }
 
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(machineStagingDir, { recursive: true, force: true });
   logger.info(`Cleaned staging directory for machine "${machine}"`);
 }
 
 export function copyToStaging(files: string[], machine: string, password?: string): void {
-  const dir = machineDir(machine);
-  fs.mkdirSync(dir, { recursive: true });
+  const machineStagingDir = machineDir(machine);
+  fs.mkdirSync(machineStagingDir, { recursive: true });
 
   const filesExcludingKeyFile = files.filter(
     (f) => path.resolve(f) !== path.resolve(KEY_FILE_PATH),
   );
 
-  let copied = 0;
+  let copiedCount = 0;
   for (const filePath of filesExcludingKeyFile) {
-    const dest = getStagedPath(filePath, machine);
-    const finalDest = password ? dest + ENC_SUFFIX : dest;
+    const stagedPath = getStagedPath(filePath, machine);
+    const destinationPath = password ? stagedPath + ENC_SUFFIX : stagedPath;
 
     try {
-      fs.mkdirSync(path.dirname(finalDest), { recursive: true });
+      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
 
       if (password) {
         const plaintext = fs.readFileSync(filePath);
-        fs.writeFileSync(finalDest, encryptBuffer(plaintext, password));
+        fs.writeFileSync(destinationPath, encryptBuffer(plaintext, password));
       } else {
-        fs.copyFileSync(filePath, finalDest);
+        fs.copyFileSync(filePath, destinationPath);
       }
-      copied++;
+      copiedCount++;
     } catch {
-      logger.warn(`Failed to copy: ${filePath} -> ${finalDest}`);
+      logger.warn(`Failed to copy: ${filePath} -> ${destinationPath}`);
     }
   }
 
-  logger.info(`Copied ${pluralize(copied, "file")} to staging`);
+  logger.info(`Copied ${pluralize(copiedCount, "file")} to staging`);
 }
 
 export interface ComparisonResult {
@@ -104,52 +106,52 @@ export async function compareFiles(opts: {
     return failedComparisonResult(err);
   }
 
-  let committedHashes: Map<string, string>;
+  let remoteBlobHashes: Map<string, string>;
   try {
     const treeOutput = execFileSync("git", ["ls-tree", "-r", `origin/${branch}`, `${machine}/`], {
       encoding: "utf-8",
       cwd: STAGING_DIR,
     });
-    committedHashes = new Map(
+    remoteBlobHashes = new Map(
       treeOutput
         .split("\n")
         .map((line) => line.match(/^\d+ blob ([0-9a-f]+)\t(.+)$/))
-        .filter((m): m is RegExpMatchArray => m !== null)
-        .map((m) => [m[2], m[1]] as const),
+        .filter((match): match is RegExpMatchArray => match !== null)
+        .map((match) => [match[2], match[1]] as const),
     );
   } catch (err) {
     return failedComparisonResult(err);
   }
 
   if (password) {
-    return compareFilesEncrypted(files, machine, committedHashes, password);
+    return compareFilesEncrypted(files, machine, remoteBlobHashes, password);
   }
 
-  let sourceHashes: string[];
+  let localFileHashes: string[];
   try {
     const hashOutput = execFileSync("git", ["hash-object", "--stdin-paths"], {
       encoding: "utf-8",
       input: files.join("\n") + "\n",
     });
-    sourceHashes = hashOutput.trim().split("\n");
+    localFileHashes = hashOutput.trim().split("\n");
   } catch (err) {
     return failedComparisonResult(err);
   }
 
   return files.reduce<ComparisonResult>(
-    (acc, file, i) => {
+    (result, file, i) => {
       const repoRelPath = path.relative(STAGING_DIR, getStagedPath(file, machine));
-      const committedHash = committedHashes.get(repoRelPath);
+      const remoteBlobHash = remoteBlobHashes.get(repoRelPath);
 
-      if (!committedHash) {
-        acc.notBackedUp.push(file);
-      } else if (committedHash === sourceHashes[i]) {
-        acc.backedUp.push(file);
+      if (!remoteBlobHash) {
+        result.notBackedUp.push(file);
+      } else if (remoteBlobHash === localFileHashes[i]) {
+        result.backedUp.push(file);
       } else {
-        acc.modified.push(file);
+        result.modified.push(file);
       }
 
-      return acc;
+      return result;
     },
     { backedUp: [], modified: [], notBackedUp: [] },
   );
@@ -158,22 +160,22 @@ export async function compareFiles(opts: {
 function compareFilesEncrypted(
   files: string[],
   machine: string,
-  committedHashes: Map<string, string>,
+  remoteBlobHashes: Map<string, string>,
   password: string,
 ): ComparisonResult {
   const result: ComparisonResult = { backedUp: [], modified: [], notBackedUp: [] };
 
   for (const file of files) {
     const repoRelPath = path.relative(STAGING_DIR, getStagedPath(file, machine)) + ENC_SUFFIX;
-    const blobHash = committedHashes.get(repoRelPath);
+    const remoteBlobHash = remoteBlobHashes.get(repoRelPath);
 
-    if (!blobHash) {
+    if (!remoteBlobHash) {
       result.notBackedUp.push(file);
       continue;
     }
 
     try {
-      const blobContent = execFileSync("git", ["cat-file", "blob", blobHash], {
+      const blobContent = execFileSync("git", ["cat-file", "blob", remoteBlobHash], {
         cwd: STAGING_DIR,
         maxBuffer: 50 * 1024 * 1024,
       });
@@ -194,7 +196,7 @@ function compareFilesEncrypted(
   return result;
 }
 
-function repoReadme(repository: string, encrypted: boolean): string {
+function generateReadmeContent(repository: string, encrypted: boolean): string {
   const encryptionNote = encrypted
     ? "\n> **Note:** Files in this repository are encrypted. You will need the backup password to restore.\n"
     : "";
@@ -214,6 +216,9 @@ For full documentation, configuration options, and scheduling, see the [official
 }
 
 export function writeRepoReadme(repository: string, encrypted = false): void {
-  fs.writeFileSync(path.join(STAGING_DIR, "README.md"), repoReadme(repository, encrypted));
+  fs.writeFileSync(
+    path.join(STAGING_DIR, "README.md"),
+    generateReadmeContent(repository, encrypted),
+  );
   logger.info("Wrote README.md to staging directory");
 }

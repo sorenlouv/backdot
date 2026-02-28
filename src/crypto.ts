@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { password as passwordPrompt, confirm } from "@inquirer/prompts";
 
+// File-format signature identifying backdot-encrypted files
 const MAGIC = Buffer.from("BDOT");
 const VERSION = 0x01;
 const HEADER_SIZE = MAGIC.length + 1; // 5 bytes: magic + version
@@ -82,7 +83,8 @@ export function checkKeyFilePermissions(): void {
 
   const stat = fs.statSync(KEY_FILE_PATH);
   const mode = stat.mode & 0o777;
-  if (mode & 0o077) {
+  const isAccessibleByGroupOrOthers = (mode & 0o077) !== 0;
+  if (isAccessibleByGroupOrOthers) {
     throw new Error(
       `Key file ${KEY_FILE_PATH} has overly permissive permissions (${mode.toString(8)}).\n` +
         `  Run: chmod 600 ${KEY_FILE_PATH}`,
@@ -124,17 +126,17 @@ export async function resolvePassword(): Promise<PasswordResult> {
     );
   }
 
-  const pw = await passwordPrompt({ message: "Enter encryption password:" });
-  if (!pw) {
+  const enteredPassword = await passwordPrompt({ message: "Enter encryption password:" });
+  if (!enteredPassword) {
     throw new Error("No password provided.");
   }
 
-  return { password: pw, interactive: true };
+  return { password: enteredPassword, interactive: true };
 }
 
 export async function confirmPassword(password: string): Promise<void> {
-  const pw2 = await passwordPrompt({ message: "Confirm password:" });
-  if (pw2 !== password) {
+  const confirmedPassword = await passwordPrompt({ message: "Confirm password:" });
+  if (confirmedPassword !== password) {
     throw new Error("Passwords do not match.");
   }
 }

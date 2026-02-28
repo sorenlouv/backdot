@@ -26,15 +26,18 @@ export async function history(repoUrl?: string): Promise<void> {
     return;
   }
 
-  const selectedCommit = await select({
+  const selectedCommitHash = await select({
     message: "Select a backup to restore from:",
     loop: false,
-    choices: commits.map((c) => ({
-      name: `${c.hash.slice(0, 7)}  ${c.date.split("T")[0]}  ${c.message}`,
-      value: c.hash,
-    })),
+    choices: commits.map((commit) => {
+      const dateOnly = commit.date.split("T")[0];
+      return {
+        name: `${commit.hash.slice(0, 7)}  ${dateOnly}  ${commit.message}`,
+        value: commit.hash,
+      };
+    }),
   });
 
   console.log();
-  await restore({ repoUrl, commit: selectedCommit });
+  await restore({ repoUrl, commit: selectedCommitHash });
 }

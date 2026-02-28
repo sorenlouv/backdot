@@ -14,8 +14,8 @@ function escapeXml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-const LABEL = "com.backdot.daemon";
-const PLIST_PATH = path.join(os.homedir(), "Library", "LaunchAgents", `${LABEL}.plist`);
+const LAUNCHD_JOB_LABEL = "com.backdot.daemon";
+const PLIST_PATH = path.join(os.homedir(), "Library", "LaunchAgents", `${LAUNCHD_JOB_LABEL}.plist`);
 
 function getScriptPath(): string {
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
@@ -33,7 +33,7 @@ function buildPlist(): string {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>${LABEL}</string>
+  <string>${LAUNCHD_JOB_LABEL}</string>
   <key>ProgramArguments</key>
   <array>
     <string>${escapeXml(nodePath)}</string>
@@ -64,8 +64,11 @@ export function isScheduled(): boolean {
     return false;
   }
   try {
-    const output = execFileSync("launchctl", ["list", LABEL], { encoding: "utf-8", stdio: "pipe" });
-    return output.includes(LABEL);
+    const output = execFileSync("launchctl", ["list", LAUNCHD_JOB_LABEL], {
+      encoding: "utf-8",
+      stdio: "pipe",
+    });
+    return output.includes(LAUNCHD_JOB_LABEL);
   } catch {
     return false;
   }
@@ -75,9 +78,9 @@ export function setupLaunchd(): void {
   const spinner = ora("Installing schedule").start();
 
   const plistContent = buildPlist();
-  const dir = path.dirname(PLIST_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  const launchAgentsDir = path.dirname(PLIST_PATH);
+  if (!fs.existsSync(launchAgentsDir)) {
+    fs.mkdirSync(launchAgentsDir, { recursive: true });
   }
 
   try {

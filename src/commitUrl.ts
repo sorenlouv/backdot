@@ -1,7 +1,7 @@
 const PROVIDERS: Record<string, (repoPath: string, sha: string) => string> = {
-  "github.com": (p, sha) => `https://github.com/${p}/commit/${sha}`,
-  "gitlab.com": (p, sha) => `https://gitlab.com/${p}/-/commit/${sha}`,
-  "bitbucket.org": (p, sha) => `https://bitbucket.org/${p}/commits/${sha}`,
+  "github.com": (repoPath, sha) => `https://github.com/${repoPath}/commit/${sha}`,
+  "gitlab.com": (repoPath, sha) => `https://gitlab.com/${repoPath}/-/commit/${sha}`,
+  "bitbucket.org": (repoPath, sha) => `https://bitbucket.org/${repoPath}/commits/${sha}`,
 };
 
 export function getCommitUrl(remoteUrl: string, sha: string): string | null {
@@ -11,7 +11,8 @@ export function getCommitUrl(remoteUrl: string, sha: string): string | null {
       continue;
     }
 
-    let repoPath = remoteUrl.slice(idx + host.length + 1).trim();
+    const separatorLength = 1; // skip the ":" (SSH) or "/" (HTTPS) after the hostname
+    let repoPath = remoteUrl.slice(idx + host.length + separatorLength).trim();
     if (repoPath.endsWith(".git")) {
       repoPath = repoPath.slice(0, -4);
     }

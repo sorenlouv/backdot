@@ -17,14 +17,18 @@ import {
 } from "../crypto.js";
 
 function findEncryptedFile(dir: string): string | null {
-  if (!fs.existsSync(dir)) {return null;}
+  if (!fs.existsSync(dir)) {
+    return null;
+  }
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
+    const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      const found = findEncryptedFile(full);
-      if (found) {return found;}
+      const encryptedFile = findEncryptedFile(fullPath);
+      if (encryptedFile) {
+        return encryptedFile;
+      }
     } else if (entry.name.endsWith(ENC_SUFFIX)) {
-      return full;
+      return fullPath;
     }
   }
   return null;
@@ -72,12 +76,12 @@ export async function backup(): Promise<void> {
     await gitPull(config.repository);
 
     if (password) {
-      const existingEncFile = findEncryptedFile(machineDir(config.machine));
-      if (existingEncFile) {
+      const existingEncryptedFile = findEncryptedFile(machineDir(config.machine));
+      if (existingEncryptedFile) {
         spinner.text = "Verifying encryption password";
-        const encData = fs.readFileSync(existingEncFile);
+        const encryptedContent = fs.readFileSync(existingEncryptedFile);
         try {
-          decryptBuffer(encData, password);
+          decryptBuffer(encryptedContent, password);
         } catch {
           spinner.fail("Backup failed");
           throw new Error("Password does not match the existing backup.");

@@ -19,7 +19,7 @@ function getMachineName(): string {
   return os.hostname().replace(/\.(local|localdomain)$/, "");
 }
 
-const TEMPLATE = {
+const DEFAULT_CONFIG = {
   repository: "git@github.com:USERNAME/backdot-backup.git",
   machine: getMachineName(),
   paths: ["~/.zshrc", "~/.gitconfig"],
@@ -49,7 +49,7 @@ export function init(): void {
   if (fs.existsSync(CONFIG_PATH)) {
     console.log(`  ${chalk.yellow(`${CONFIG_PATH} already exists — skipping creation.`)}`);
   } else {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(TEMPLATE, null, 2) + "\n");
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n");
     console.log(`  Created ${CONFIG_PATH} with defaults.`);
   }
 

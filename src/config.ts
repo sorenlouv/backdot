@@ -5,14 +5,15 @@ import { z } from "zod";
 
 export const CONFIG_PATH = path.join(os.homedir(), ".backdot.json");
 
-export function expandTilde(p: string): string {
-  if (p.startsWith("!")) {
-    return "!" + expandTilde(p.slice(1));
+export function expandTilde(pattern: string): string {
+  // fast-glob uses "!" for negation patterns — preserve the prefix, expand the rest
+  if (pattern.startsWith("!")) {
+    return "!" + expandTilde(pattern.slice(1));
   }
-  if (p.startsWith("~/") || p === "~") {
-    return path.join(os.homedir(), p.slice(1));
+  if (pattern.startsWith("~/") || pattern === "~") {
+    return path.join(os.homedir(), pattern.slice(1));
   }
-  return p;
+  return pattern;
 }
 
 const ConfigSchema = z.object({
@@ -31,25 +32,25 @@ export function loadConfig(): Config {
     throw new Error(`Config file not found: ${CONFIG_PATH}\n  Run "backdot init" to create it.`);
   }
 
-  let raw: string;
+  let rawJson: string;
   try {
-    raw = fs.readFileSync(CONFIG_PATH, "utf-8");
+    rawJson = fs.readFileSync(CONFIG_PATH, "utf-8");
   } catch {
     throw new Error(`Failed to read config file: ${CONFIG_PATH}`);
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(rawJson);
   } catch {
     throw new Error(`Invalid JSON in config file: ${CONFIG_PATH}`);
   }
 
   const result = ConfigSchema.safeParse(parsed);
   if (!result.success) {
-    const messages = result.error.issues.map((i) => {
-      const path = i.path.length > 0 ? `"${i.path.join(".")}"` : "config";
-      return `  - ${path}: ${i.message}`;
+    const messages = result.error.issues.map((issue) => {
+      const field = issue.path.length > 0 ? `"${issue.path.join(".")}"` : "config";
+      return `  - ${field}: ${issue.message}`;
     });
     throw new Error(`Invalid config in ${CONFIG_PATH}:\n${messages.join("\n")}`);
   }

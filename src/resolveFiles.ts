@@ -23,9 +23,9 @@ const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
  * Skips entries that fail resolution and logs warnings.
  */
 export function resolveFiles(config: Config): string[] {
-  const unique = uniq(resolveGlobs(config.paths));
+  const deduplicatedPaths = uniq(resolveGlobs(config.paths));
 
-  return unique.filter((filePath) => {
+  return deduplicatedPaths.filter((filePath) => {
     try {
       fs.accessSync(filePath, fs.constants.R_OK);
       const stat = fs.statSync(filePath);

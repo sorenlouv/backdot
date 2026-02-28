@@ -12,13 +12,13 @@ import { decryptBuffer, resolvePassword, offerToSaveKeyFile, ENC_SUFFIX } from "
 
 const HOME = os.homedir();
 
-function walkDir(dir: string): string[] {
+function listFilesRecursively(dir: string): string[] {
   return fs
     .readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.name !== ".git")
     .flatMap((entry) => {
-      const full = path.join(dir, entry.name);
-      return entry.isDirectory() ? walkDir(full) : [full];
+      const fullPath = path.join(dir, entry.name);
+      return entry.isDirectory() ? listFilesRecursively(fullPath) : [fullPath];
     });
 }
 
@@ -28,8 +28,8 @@ function listMachines(): string[] {
   }
   return fs
     .readdirSync(STAGING_DIR, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && e.name !== ".git")
-    .map((e) => e.name);
+    .filter((entry) => entry.isDirectory() && entry.name !== ".git")
+    .map((entry) => entry.name);
 }
 
 async function resolveRepoAndMachine(
@@ -107,7 +107,7 @@ export async function restore({
     return;
   }
 
-  const stagedFiles = walkDir(baseDir);
+  const stagedFiles = listFilesRecursively(baseDir);
   logger.info(`Found ${pluralize(stagedFiles.length, "file")} in backup repository`);
 
   if (stagedFiles.length === 0) {
@@ -116,49 +116,53 @@ export async function restore({
     return;
   }
 
-  const fileMappings = stagedFiles.map((src) => {
-    let rel = path.relative(baseDir, src);
-    if (rel.endsWith(ENC_SUFFIX)) {rel = rel.slice(0, -ENC_SUFFIX.length);}
-    return { src, dest: path.join(HOME, rel), rel };
+  const fileMappings = stagedFiles.map((stagedFilePath) => {
+    let relativePath = path.relative(baseDir, stagedFilePath);
+    if (relativePath.endsWith(ENC_SUFFIX)) {
+      relativePath = relativePath.slice(0, -ENC_SUFFIX.length);
+    }
+    return { src: stagedFilePath, dest: path.join(HOME, relativePath), rel: relativePath };
   });
 
-  const existing = fileMappings.filter((f) => fs.existsSync(f.dest));
-  const fresh = fileMappings.filter((f) => !fs.existsSync(f.dest));
-  logger.info(`${fresh.length} new, ${existing.length} already exist`);
+  const filesAlreadyOnDisk = fileMappings.filter((file) => fs.existsSync(file.dest));
+  const newFiles = fileMappings.filter((file) => !fs.existsSync(file.dest));
+  logger.info(`${newFiles.length} new, ${filesAlreadyOnDisk.length} already exist`);
 
   spinner.stop();
   console.log();
 
   type FileMapping = (typeof fileMappings)[number];
 
-  let toRestore: FileMapping[];
+  let filesToRestore: FileMapping[];
 
   if (yes) {
-    toRestore = fresh;
-    if (existing.length > 0) {
+    filesToRestore = newFiles;
+    if (filesAlreadyOnDisk.length > 0) {
       console.log(
-        `  Skipped ${pluralize(existing.length, "existing file")}. Run without --yes to select them.`,
+        `  Skipped ${pluralize(filesAlreadyOnDisk.length, "existing file")}. Run without --yes to select them.`,
       );
       console.log();
     }
   } else {
     const choices: Array<{ name: string; value: FileMapping; checked: boolean } | Separator> = [];
 
-    if (fresh.length > 0) {
-      choices.push(new Separator(`── New files (${fresh.length}) ──`));
-      for (const f of fresh) {
-        choices.push({ name: f.rel, value: f, checked: true });
+    if (newFiles.length > 0) {
+      choices.push(new Separator(`── New files (${newFiles.length}) ──`));
+      for (const file of newFiles) {
+        choices.push({ name: file.rel, value: file, checked: true });
       }
     }
 
-    if (existing.length > 0) {
-      choices.push(new Separator(`── Existing files — will overwrite (${existing.length}) ──`));
-      for (const f of existing) {
-        choices.push({ name: f.rel, value: f, checked: false });
+    if (filesAlreadyOnDisk.length > 0) {
+      choices.push(
+        new Separator(`── Existing files — will overwrite (${filesAlreadyOnDisk.length}) ──`),
+      );
+      for (const file of filesAlreadyOnDisk) {
+        choices.push({ name: file.rel, value: file, checked: false });
       }
     }
 
-    toRestore = await checkbox({
+    filesToRestore = await checkbox({
       message: "Select files to restore:",
       loop: false,
       choices,
@@ -166,21 +170,21 @@ export async function restore({
     console.log();
   }
 
-  if (toRestore.length === 0) {
+  if (filesToRestore.length === 0) {
     console.log("No files selected for restore.");
     return;
   }
 
   let password: string | undefined;
-  const hasEncryptedFiles = toRestore.some(({ src }) => src.endsWith(ENC_SUFFIX));
+  const hasEncryptedFiles = filesToRestore.some(({ src }) => src.endsWith(ENC_SUFFIX));
 
   if (hasEncryptedFiles) {
     const result = await resolvePassword();
     password = result.password;
   }
 
-  const copySpinner = ora("Restoring files").start();
-  for (const { src, dest } of toRestore) {
+  const restoreSpinner = ora("Restoring files").start();
+  for (const { src, dest } of filesToRestore) {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
 
     if (password && src.endsWith(ENC_SUFFIX)) {
@@ -190,12 +194,12 @@ export async function restore({
       fs.copyFileSync(src, dest);
     }
   }
-  copySpinner.succeed(`Restored ${pluralize(toRestore.length, "file")}`);
+  restoreSpinner.succeed(`Restored ${pluralize(filesToRestore.length, "file")}`);
   console.log();
 
   if (password) {
     await offerToSaveKeyFile(password);
   }
 
-  logger.info(`Restored ${pluralize(toRestore.length, "file")}`);
+  logger.info(`Restored ${pluralize(filesToRestore.length, "file")}`);
 }

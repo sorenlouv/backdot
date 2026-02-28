@@ -9,13 +9,13 @@ import { pluralize } from "../utils.js";
 import { checkRepoVisibility, type RepoVisibility } from "../repoVisibility.js";
 import { resolvePassword } from "../crypto.js";
 
-function tildePath(filePath: string): string {
+function abbreviateHomePath(filePath: string): string {
   const home = os.homedir();
   return filePath.startsWith(home) ? "~" + filePath.slice(home.length) : filePath;
 }
 
-function formatVisibility(v: RepoVisibility): string {
-  switch (v) {
+function formatVisibility(visibility: RepoVisibility): string {
+  switch (visibility) {
     case "public":
       return chalk.red.bold("public (backup disabled)");
     case "private":
@@ -95,24 +95,24 @@ export async function status(): Promise<void> {
     } else {
       if (modified.length > 0) {
         console.log(chalk.yellow(`  Modified since last backup (${modified.length}):`));
-        for (const f of modified) {
-          console.log(`        ${tildePath(f)}`);
+        for (const filePath of modified) {
+          console.log(`        ${abbreviateHomePath(filePath)}`);
         }
         console.log();
       }
 
       if (notBackedUp.length > 0) {
         console.log(chalk.red(`  Not yet backed up (${notBackedUp.length}):`));
-        for (const f of notBackedUp) {
-          console.log(`        ${tildePath(f)}`);
+        for (const filePath of notBackedUp) {
+          console.log(`        ${abbreviateHomePath(filePath)}`);
         }
         console.log();
       }
 
       if (backedUp.length > 0) {
         console.log(chalk.green(`  Backed up (${backedUp.length}):`));
-        for (const f of backedUp) {
-          console.log(`        ${tildePath(f)}`);
+        for (const filePath of backedUp) {
+          console.log(`        ${abbreviateHomePath(filePath)}`);
         }
         console.log();
       }
