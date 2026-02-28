@@ -1,6 +1,6 @@
 {
   "name": "backdot",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Lightweight CLI to backup dotfiles and gitignored files to a Git repo on a daily schedule",
   "type": "module",
   "license": "MIT",
