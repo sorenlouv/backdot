@@ -68,7 +68,11 @@ describe("backdot init", () => {
 
     const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     expect(config.repository).toBe("git@github.com:USERNAME/backdot-backup.git");
-    expect(config.machine).toBe(os.hostname());
+    expect(config.machine).toBe(
+      process.platform === "darwin"
+        ? execSync("scutil --get LocalHostName", { encoding: "utf-8" }).trim()
+        : os.hostname().replace(/\.(local|localdomain)$/, ""),
+    );
     expect(config.paths).toEqual(["~/.zshrc", "~/.gitconfig"]);
   });
 
@@ -394,7 +398,7 @@ describe("encrypted backup and restore", () => {
     expect(fs.existsSync(encryptedFile)).toBe(true);
 
     const content = fs.readFileSync(encryptedFile);
-    expect(content.subarray(0, 4).toString()).toBe("BDOT");
+    expect(content.length).toBeGreaterThan(60); // salt(32) + iv(12) + tag(16) + ciphertext
     expect(content.toString("utf-8")).not.toContain("encrypted zshrc test");
 
     const readme = fs.readFileSync(path.join(verifyDir, "README.md"), "utf-8");
