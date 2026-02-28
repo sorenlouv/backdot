@@ -43,7 +43,9 @@ export async function status(): Promise<void> {
   const visibilitySpinner = ora("Checking repository visibility").start();
   const visibility = await checkRepoVisibility(config.repository);
   visibilitySpinner.stop();
-  console.log(`  Visibility:  ${formatVisibility(visibility)}`);
+  if (visibility !== "private") {
+    console.log(`  Visibility:  ${formatVisibility(visibility)}`);
+  }
 
   if (visibility === "public") {
     console.log();
