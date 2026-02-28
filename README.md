@@ -49,6 +49,12 @@ Prefix a pattern with `!` to exclude matching files:
 }
 ```
 
+## Encryption
+
+To encrypt files before they are pushed to the remote repo, add `"encrypt": true` to your config.
+
+On first backup you'll be prompted for a password and offered to save it to `~/.backdot.key` so that future backups do not prompt for a password.
+
 ## Commands
 
 | Command                        | Description                                    |
