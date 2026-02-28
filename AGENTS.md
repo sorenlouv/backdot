@@ -18,10 +18,17 @@ Fast, simple, beautiful. When in doubt, leave it out.
 - **Restore is self-bootstrapping.** The config file is always included in backups so `restore <url>` works on a blank machine with zero prior setup.
 - **Non-destructive restore.** New files restore automatically. Existing files prompt before overwriting.
 
+## Platform
+
+- **macOS first.** Optimized for Mac, but should work on Linux and Windows too. Notable exception: scheduling (launchd) is macOS-only for now.
+
+## Git providers
+
+- **GitHub, GitLab, and Bitbucket.** Any provider that supports standard Git over HTTPS or SSH should work, but these three are the optimization targets.
+
 ## Scope
 
 - **Git is the only backend.** Non-git backends: firm no.
-- **macOS scheduling first.** Linux/Windows welcome if requested.
 - The 10 MB file-size limit has no strong justification — can be raised or removed.
 - Other features: consider if highly requested and/or simple to implement.
 

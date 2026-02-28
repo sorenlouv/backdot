@@ -62,7 +62,7 @@ cli.command("", "").action(() => {
   }
 });
 
-cli.help();
+cli.help((sections) => sections.filter((s) => !s.body?.includes("--help")));
 cli.version(getVersion());
 
 async function main(): Promise<void> {
