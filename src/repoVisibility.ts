@@ -15,7 +15,9 @@ const KNOWN_HOSTS = ["github.com", "gitlab.com", "bitbucket.org"];
 export function toHttpsUrl(repository: string): string | null {
   for (const host of KNOWN_HOSTS) {
     const idx = repository.indexOf(host);
-    if (idx === -1) {continue;}
+    if (idx === -1) {
+      continue;
+    }
 
     let repoPath = repository.slice(idx + host.length + 1).trim();
     if (!repoPath.endsWith(".git")) {
@@ -33,7 +35,9 @@ export function toHttpsUrl(repository: string): string | null {
  */
 export async function checkRepoVisibility(repository: string): Promise<RepoVisibility> {
   const httpsUrl = toHttpsUrl(repository);
-  if (!httpsUrl) {return "unknown";}
+  if (!httpsUrl) {
+    return "unknown";
+  }
 
   try {
     await execGitLsRemote(httpsUrl);
@@ -53,8 +57,11 @@ function execGitLsRemote(url: string): Promise<void> {
         env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
       },
       (error) => {
-        if (error) {reject(error);}
-        else {resolve();}
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
       },
     );
 
