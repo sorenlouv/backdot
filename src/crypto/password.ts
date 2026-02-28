@@ -1,77 +1,10 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { password as passwordPrompt, confirm } from "@inquirer/prompts";
 
-// File-format signature identifying backdot-encrypted files
-const MAGIC = Buffer.from("BDOT");
-const VERSION = 0x01;
-const HEADER_SIZE = MAGIC.length + 1; // 5 bytes: magic + version
-const SALT_SIZE = 32;
-const IV_SIZE = 12;
-const TAG_SIZE = 16;
-const KEY_SIZE = 32;
-
 export const KEY_FILE_PATH = path.join(os.homedir(), ".backdot.key");
 export const ENC_SUFFIX = ".encrypted";
-
-function deriveKey(password: string, salt: Buffer): Buffer {
-  return crypto.scryptSync(password, salt, KEY_SIZE, { N: 2 ** 14, r: 8, p: 1 });
-}
-
-export function encryptBuffer(plaintext: Buffer, password: string): Buffer {
-  const salt = crypto.randomBytes(SALT_SIZE);
-  const iv = crypto.randomBytes(IV_SIZE);
-  const key = deriveKey(password, salt);
-
-  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  const tag = cipher.getAuthTag();
-
-  return Buffer.concat([MAGIC, Buffer.from([VERSION]), salt, iv, tag, encrypted]);
-}
-
-export function decryptBuffer(data: Buffer, password: string): Buffer {
-  if (!isEncrypted(data)) {
-    throw new Error("File is not encrypted (missing BDOT header).");
-  }
-
-  const minSize = HEADER_SIZE + SALT_SIZE + IV_SIZE + TAG_SIZE;
-  if (data.length < minSize) {
-    throw new Error("Encrypted file is too short or corrupted.");
-  }
-
-  let offset = HEADER_SIZE;
-  const salt = data.subarray(offset, offset + SALT_SIZE);
-  offset += SALT_SIZE;
-  const iv = data.subarray(offset, offset + IV_SIZE);
-  offset += IV_SIZE;
-  const tag = data.subarray(offset, offset + TAG_SIZE);
-  offset += TAG_SIZE;
-  const ciphertext = data.subarray(offset);
-
-  const key = deriveKey(password, salt);
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(tag);
-
-  try {
-    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  } catch {
-    throw new Error("Decryption failed — wrong password or corrupted file.");
-  }
-}
-
-function isEncrypted(data: Buffer): boolean {
-  return (
-    data.length >= HEADER_SIZE &&
-    data[0] === MAGIC[0] &&
-    data[1] === MAGIC[1] &&
-    data[2] === MAGIC[2] &&
-    data[3] === MAGIC[3] &&
-    data[4] === VERSION
-  );
-}
 
 export function checkKeyFilePermissions(): void {
   if (process.platform === "win32") {

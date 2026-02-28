@@ -41,10 +41,15 @@ vi.mock("./git.js", async () => {
   };
 });
 
-const mockEncryptBuffer = vi.fn((buf: Buffer) => Buffer.concat([Buffer.from("ENCRYPTED:"), buf]));
-vi.mock("./crypto.js", () => ({
-  encryptBuffer: (...args: unknown[]) => mockEncryptBuffer(...(args as [Buffer])),
-  decryptBuffer: (buf: Buffer) => buf.subarray(10),
+const mockEncrypt = vi.fn((buf: Buffer) => Buffer.concat([Buffer.from("ENCRYPTED:"), buf]));
+const mockDerivedKey = { password: "test-password", salt: Buffer.alloc(32), key: Buffer.alloc(32) };
+vi.mock("./crypto/encryption.js", () => ({
+  encrypt: (...args: unknown[]) => mockEncrypt(...(args as [Buffer])),
+  decrypt: (buf: Buffer) => buf.subarray(10),
+  deriveKey: () => mockDerivedKey,
+}));
+
+vi.mock("./crypto/password.js", () => ({
   KEY_FILE_PATH: "/mock-home/.backdot.key",
   ENC_SUFFIX: ".encrypted",
 }));
@@ -294,36 +299,36 @@ describe("copyToStaging with encryption", () => {
     vi.resetAllMocks();
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(Buffer.from("file content"));
-    mockEncryptBuffer.mockImplementation((buf: Buffer) =>
+    mockEncrypt.mockImplementation((buf: Buffer) =>
       Buffer.concat([Buffer.from("ENCRYPTED:"), buf]),
     );
   });
 
-  it("encrypts files and appends .encrypted suffix when password is provided", () => {
+  it("encrypts files and appends .encrypted suffix when derivedKey is provided", () => {
     const files = [`${HOME}/.zshrc`];
-    copyToStaging(files, MACHINE, "test-password");
+    copyToStaging(files, MACHINE, mockDerivedKey);
 
     expect(fs.readFileSync).toHaveBeenCalledWith(`${HOME}/.zshrc`);
-    expect(mockEncryptBuffer).toHaveBeenCalledWith(Buffer.from("file content"), "test-password");
+    expect(mockEncrypt).toHaveBeenCalledWith(Buffer.from("file content"), mockDerivedKey);
     expect(fs.writeFileSync).toHaveBeenCalledWith(
       getStagedPath(`${HOME}/.zshrc`, MACHINE) + ".encrypted",
       expect.any(Buffer),
     );
   });
 
-  it("uses copyFileSync when no password is provided", () => {
+  it("uses copyFileSync when no derivedKey is provided", () => {
     const files = [`${HOME}/.zshrc`];
     copyToStaging(files, MACHINE);
 
-    expect(mockEncryptBuffer).not.toHaveBeenCalled();
+    expect(mockEncrypt).not.toHaveBeenCalled();
     expect(fs.copyFileSync).toHaveBeenCalled();
   });
 
   it("excludes the key file from backup", () => {
     const files = [`${HOME}/.zshrc`, "/mock-home/.backdot.key"];
-    copyToStaging(files, MACHINE, "test-password");
+    copyToStaging(files, MACHINE, mockDerivedKey);
 
-    expect(mockEncryptBuffer).toHaveBeenCalledTimes(1);
+    expect(mockEncrypt).toHaveBeenCalledTimes(1);
   });
 });
 

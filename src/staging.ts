@@ -7,7 +7,8 @@ import { logger } from "./log.js";
 import { errorMessage, pluralize } from "./utils.js";
 import { ensureRemoteUrl, getCurrentBranch, gitError } from "./git.js";
 import { STAGING_DIR, STAGING_GIT_DIR, machineDir } from "./paths.js";
-import { encryptBuffer, decryptBuffer, KEY_FILE_PATH, ENC_SUFFIX } from "./crypto.js";
+import { encrypt, decrypt, type DerivedKey } from "./crypto/encryption.js";
+import { KEY_FILE_PATH, ENC_SUFFIX } from "./crypto/password.js";
 
 export { STAGING_DIR, STAGING_GIT_DIR, machineDir };
 
@@ -31,7 +32,7 @@ export function cleanStaging(machine: string): void {
   logger.info(`Cleaned staging directory for machine "${machine}"`);
 }
 
-export function copyToStaging(files: string[], machine: string, password?: string): void {
+export function copyToStaging(files: string[], machine: string, derivedKey?: DerivedKey): void {
   const machineStagingDir = machineDir(machine);
   fs.mkdirSync(machineStagingDir, { recursive: true });
 
@@ -42,14 +43,14 @@ export function copyToStaging(files: string[], machine: string, password?: strin
   let copiedCount = 0;
   for (const filePath of filesExcludingKeyFile) {
     const stagedPath = getStagedPath(filePath, machine);
-    const destinationPath = password ? stagedPath + ENC_SUFFIX : stagedPath;
+    const destinationPath = derivedKey ? stagedPath + ENC_SUFFIX : stagedPath;
 
     try {
       fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
 
-      if (password) {
+      if (derivedKey) {
         const plaintext = fs.readFileSync(filePath);
-        fs.writeFileSync(destinationPath, encryptBuffer(plaintext, password));
+        fs.writeFileSync(destinationPath, encrypt(plaintext, derivedKey));
       } else {
         fs.copyFileSync(filePath, destinationPath);
       }
@@ -77,9 +78,9 @@ export async function compareFiles(opts: {
   files: string[];
   machine: string;
   repository: string;
-  password?: string;
+  derivedKey?: DerivedKey;
 }): Promise<ComparisonResult> {
-  const { files, machine, repository, password } = opts;
+  const { files, machine, repository, derivedKey } = opts;
   if (files.length === 0) {
     return { backedUp: [], modified: [], notBackedUp: [] };
   }
@@ -123,8 +124,8 @@ export async function compareFiles(opts: {
     return failedComparisonResult(err);
   }
 
-  if (password) {
-    return compareFilesEncrypted(files, machine, remoteBlobHashes, password);
+  if (derivedKey) {
+    return compareFilesEncrypted(files, machine, remoteBlobHashes, derivedKey);
   }
 
   let localFileHashes: string[];
@@ -161,7 +162,7 @@ function compareFilesEncrypted(
   files: string[],
   machine: string,
   remoteBlobHashes: Map<string, string>,
-  password: string,
+  derivedKey: DerivedKey,
 ): ComparisonResult {
   const result: ComparisonResult = { backedUp: [], modified: [], notBackedUp: [] };
 
@@ -180,7 +181,7 @@ function compareFilesEncrypted(
         maxBuffer: 50 * 1024 * 1024,
       });
 
-      const decrypted = decryptBuffer(blobContent, password);
+      const decrypted = decrypt(blobContent, derivedKey);
       const localContent = fs.readFileSync(file);
 
       if (decrypted.equals(localContent)) {

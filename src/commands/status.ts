@@ -7,7 +7,8 @@ import { compareFiles } from "../staging.js";
 import { isScheduled } from "../launchd.js";
 import { pluralize } from "../utils.js";
 import { checkRepoVisibility, type RepoVisibility } from "../repoVisibility.js";
-import { resolvePassword } from "../crypto.js";
+import { deriveKey } from "../crypto/encryption.js";
+import { resolvePassword } from "../crypto/password.js";
 
 function abbreviateHomePath(filePath: string): string {
   const home = os.homedir();
@@ -56,11 +57,7 @@ export async function status(): Promise<void> {
     return;
   }
 
-  let password: string | undefined;
-  if (config.encrypt) {
-    const result = await resolvePassword();
-    password = result.password;
-  }
+  const derivedKey = config.encrypt ? deriveKey((await resolvePassword()).password) : undefined;
 
   console.log();
 
@@ -81,7 +78,7 @@ export async function status(): Promise<void> {
       files,
       machine: config.machine,
       repository: config.repository,
-      password,
+      derivedKey,
     });
     spinner.stop();
 

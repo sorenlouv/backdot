@@ -2,7 +2,7 @@ import fs from "node:fs";
 import chalk from "chalk";
 import { setupLaunchd, uninstallLaunchd } from "../launchd.js";
 import { loadConfig } from "../config.js";
-import { KEY_FILE_PATH } from "../crypto.js";
+import { KEY_FILE_PATH } from "../crypto/password.js";
 
 function requireMacOS(): void {
   if (process.platform !== "darwin") {

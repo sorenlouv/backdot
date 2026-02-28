@@ -8,13 +8,13 @@ import { gitPull, gitCommitAndPush } from "../git.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
 import { checkRepoVisibility } from "../repoVisibility.js";
+import { decrypt, deriveKey, type DerivedKey } from "../crypto/encryption.js";
 import {
   resolvePassword,
   offerToSaveKeyFile,
-  decryptBuffer,
   confirmPassword,
   ENC_SUFFIX,
-} from "../crypto.js";
+} from "../crypto/password.js";
 
 function findEncryptedFile(dir: string): string | null {
   if (!fs.existsSync(dir)) {
@@ -41,12 +41,14 @@ export async function backup(): Promise<void> {
   logger.info(`Machine: ${config.machine}`);
 
   let password: string | undefined;
+  let derivedKey: DerivedKey | undefined;
   let passwordWasInteractive = false;
 
   if (config.encrypt) {
     const result = await resolvePassword();
     password = result.password;
     passwordWasInteractive = result.interactive;
+    derivedKey = deriveKey(password);
   }
 
   const spinner = ora("Checking repository visibility").start();
@@ -75,27 +77,27 @@ export async function backup(): Promise<void> {
     spinner.text = "Syncing with remote";
     await gitPull(config.repository);
 
-    if (password) {
+    if (derivedKey) {
       const existingEncryptedFile = findEncryptedFile(machineDir(config.machine));
       if (existingEncryptedFile) {
         spinner.text = "Verifying encryption password";
         const encryptedContent = fs.readFileSync(existingEncryptedFile);
         try {
-          decryptBuffer(encryptedContent, password);
+          decrypt(encryptedContent, derivedKey);
         } catch {
           spinner.fail("Backup failed");
           throw new Error("Password does not match the existing backup.");
         }
       } else if (passwordWasInteractive) {
         spinner.stop();
-        await confirmPassword(password);
+        await confirmPassword(password!);
         spinner.start();
       }
     }
 
     spinner.text = `Copying ${pluralize(files.length, "file")} to staging`;
     cleanStaging(config.machine);
-    copyToStaging(files, config.machine, password);
+    copyToStaging(files, config.machine, derivedKey);
     writeRepoReadme(config.repository, config.encrypt);
 
     spinner.text = "Pushing to remote";

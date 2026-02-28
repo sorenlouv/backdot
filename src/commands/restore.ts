@@ -8,7 +8,8 @@ import { gitPull } from "../git.js";
 import { STAGING_DIR, machineDir } from "../staging.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
-import { decryptBuffer, resolvePassword, offerToSaveKeyFile, ENC_SUFFIX } from "../crypto.js";
+import { decrypt, deriveKey } from "../crypto/encryption.js";
+import { resolvePassword, offerToSaveKeyFile, ENC_SUFFIX } from "../crypto/password.js";
 
 const HOME = os.homedir();
 
@@ -183,13 +184,15 @@ export async function restore({
     password = result.password;
   }
 
+  const derivedKey = password ? deriveKey(password) : undefined;
+
   const restoreSpinner = ora("Restoring files").start();
   for (const { src, dest } of filesToRestore) {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
 
-    if (password && src.endsWith(ENC_SUFFIX)) {
+    if (derivedKey && src.endsWith(ENC_SUFFIX)) {
       const content = fs.readFileSync(src);
-      fs.writeFileSync(dest, decryptBuffer(content, password));
+      fs.writeFileSync(dest, decrypt(content, derivedKey));
     } else {
       fs.copyFileSync(src, dest);
     }
