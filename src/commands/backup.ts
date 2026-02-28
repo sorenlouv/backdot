@@ -5,6 +5,7 @@ import { cleanStaging, copyToStaging, writeRepoReadme } from "../staging.js";
 import { gitPull, gitCommitAndPush } from "../git.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
+import { checkRepoVisibility } from "../repoVisibility.js";
 
 export async function backup(): Promise<void> {
   logger.info("Starting backup");
@@ -12,8 +13,19 @@ export async function backup(): Promise<void> {
   logger.info(`Repository: ${config.repository}`);
   logger.info(`Machine: ${config.machine}`);
 
-  const spinner = ora("Resolving files").start();
+  const spinner = ora("Checking repository visibility").start();
   try {
+    const visibility = await checkRepoVisibility(config.repository);
+    if (visibility === "public") {
+      spinner.fail("Backup refused — repository is public");
+      throw new Error(
+        `Repository "${config.repository}" is publicly accessible.\n` +
+          "Backing up to a public repo would expose sensitive files.\n" +
+          "Make the repository private, then try again.",
+      );
+    }
+
+    spinner.text = "Resolving files";
     const userFiles = resolveFiles(config);
     logger.info(`Resolved ${pluralize(userFiles.length, "file")}`);
 

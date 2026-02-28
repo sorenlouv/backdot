@@ -6,22 +6,52 @@ import { resolveFiles } from "../resolveFiles.js";
 import { compareFiles } from "../staging.js";
 import { isScheduled } from "../launchd.js";
 import { pluralize } from "../utils.js";
+import { checkRepoVisibility, type RepoVisibility } from "../repoVisibility.js";
 
 function tildePath(filePath: string): string {
   const home = os.homedir();
   return filePath.startsWith(home) ? "~" + filePath.slice(home.length) : filePath;
 }
 
+function formatVisibility(v: RepoVisibility): string {
+  switch (v) {
+    case "public":
+      return chalk.red.bold("public (backup disabled)");
+    case "private":
+      return chalk.green("private");
+    case "unknown":
+      return chalk.yellow("unknown (could not verify)");
+  }
+}
+
 export async function status(): Promise<void> {
   const scheduled = isScheduled();
   console.log();
   console.log(
-    `  Schedule:  ${scheduled ? "active (daily at 02:00)" : `not active  (run ${chalk.bold("backdot schedule")} to enable)`}`,
+    `  Schedule:    ${scheduled ? "active (daily at 02:00)" : `not active  (run ${chalk.bold("backdot schedule")} to enable)`}`,
   );
 
   const config = loadConfig();
-  console.log(`  Repo:      ${config.repository}`);
-  console.log(`  Machine:   ${config.machine}`);
+  console.log(`  Repo:        ${config.repository}`);
+  console.log(`  Machine:     ${config.machine}`);
+
+  const visibilitySpinner = ora("Checking repository visibility").start();
+  const visibility = await checkRepoVisibility(config.repository);
+  visibilitySpinner.stop();
+  console.log(`  Visibility:  ${formatVisibility(visibility)}`);
+
+  if (visibility === "public") {
+    console.log();
+    console.log(
+      chalk.red(
+        "  ⚠ Repository is public. Backup is disabled to prevent leaking sensitive files.\n" +
+          "    Make the repository private, then try again.",
+      ),
+    );
+    console.log();
+    return;
+  }
+
   console.log();
 
   const spinner = ora("Resolving files").start();
