@@ -10,6 +10,10 @@ Inspired by [mackup](https://github.com/lra/mackup), but mackup replaces files w
 
 Fast, simple, beautiful. When in doubt, leave it out.
 
+## Code style
+
+- **Clarity over brevity.** Long, obvious names are better than short, opaque ones. Code should be self-explanatory. If a name alone can't convey the intent, consider abstracting to a function, or add a comment — but prefer renaming first. The goal is to improve readability and understanding.
+
 ## Invariants
 
 - **No symlinks, ever.** Files are copied to the backup repo. Originals are never touched.

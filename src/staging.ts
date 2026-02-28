@@ -7,6 +7,7 @@ import { logger } from "./log.js";
 import { errorMessage, pluralize } from "./utils.js";
 import { ensureRemoteUrl, getCurrentBranch, gitError } from "./git.js";
 import { STAGING_DIR, STAGING_GIT_DIR, machineDir } from "./paths.js";
+import { encryptBuffer, decryptBuffer, KEY_FILE_PATH, ENC_SUFFIX } from "./crypto.js";
 
 export { STAGING_DIR, STAGING_GIT_DIR, machineDir };
 
@@ -28,20 +29,31 @@ export function cleanStaging(machine: string): void {
   logger.info(`Cleaned staging directory for machine "${machine}"`);
 }
 
-export function copyToStaging(files: string[], machine: string): void {
+export function copyToStaging(files: string[], machine: string, password?: string): void {
   const dir = machineDir(machine);
   fs.mkdirSync(dir, { recursive: true });
 
+  const filesExcludingKeyFile = files.filter(
+    (f) => path.resolve(f) !== path.resolve(KEY_FILE_PATH),
+  );
+
   let copied = 0;
-  for (const filePath of files) {
+  for (const filePath of filesExcludingKeyFile) {
     const dest = getStagedPath(filePath, machine);
+    const finalDest = password ? dest + ENC_SUFFIX : dest;
 
     try {
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.copyFileSync(filePath, dest);
+      fs.mkdirSync(path.dirname(finalDest), { recursive: true });
+
+      if (password) {
+        const plaintext = fs.readFileSync(filePath);
+        fs.writeFileSync(finalDest, encryptBuffer(plaintext, password));
+      } else {
+        fs.copyFileSync(filePath, finalDest);
+      }
       copied++;
     } catch {
-      logger.warn(`Failed to copy: ${filePath} -> ${dest}`);
+      logger.warn(`Failed to copy: ${filePath} -> ${finalDest}`);
     }
   }
 
@@ -59,11 +71,13 @@ function failedComparisonResult(err: unknown): ComparisonResult {
   return { backedUp: [], modified: [], notBackedUp: [], error: errorMessage(err) };
 }
 
-export async function compareFiles(
-  files: string[],
-  machine: string,
-  repository: string,
-): Promise<ComparisonResult> {
+export async function compareFiles(opts: {
+  files: string[];
+  machine: string;
+  repository: string;
+  password?: string;
+}): Promise<ComparisonResult> {
+  const { files, machine, repository, password } = opts;
   if (files.length === 0) {
     return { backedUp: [], modified: [], notBackedUp: [] };
   }
@@ -107,6 +121,10 @@ export async function compareFiles(
     return failedComparisonResult(err);
   }
 
+  if (password) {
+    return compareFilesEncrypted(files, machine, committedHashes, password);
+  }
+
   let sourceHashes: string[];
   try {
     const hashOutput = execFileSync("git", ["hash-object", "--stdin-paths"], {
@@ -137,11 +155,54 @@ export async function compareFiles(
   );
 }
 
-function repoReadme(repository: string): string {
+function compareFilesEncrypted(
+  files: string[],
+  machine: string,
+  committedHashes: Map<string, string>,
+  password: string,
+): ComparisonResult {
+  const result: ComparisonResult = { backedUp: [], modified: [], notBackedUp: [] };
+
+  for (const file of files) {
+    const repoRelPath = path.relative(STAGING_DIR, getStagedPath(file, machine)) + ENC_SUFFIX;
+    const blobHash = committedHashes.get(repoRelPath);
+
+    if (!blobHash) {
+      result.notBackedUp.push(file);
+      continue;
+    }
+
+    try {
+      const blobContent = execFileSync("git", ["cat-file", "blob", blobHash], {
+        cwd: STAGING_DIR,
+        maxBuffer: 50 * 1024 * 1024,
+      });
+
+      const decrypted = decryptBuffer(blobContent, password);
+      const localContent = fs.readFileSync(file);
+
+      if (decrypted.equals(localContent)) {
+        result.backedUp.push(file);
+      } else {
+        result.modified.push(file);
+      }
+    } catch {
+      result.modified.push(file);
+    }
+  }
+
+  return result;
+}
+
+function repoReadme(repository: string, encrypted: boolean): string {
+  const encryptionNote = encrypted
+    ? "\n> **Note:** Files in this repository are encrypted. You will need the backup password to restore.\n"
+    : "";
+
   return `# Backdot Backup
 
 This repository contains files backed up automatically using [backdot](https://github.com/sorenlouv/backdot).
-
+${encryptionNote}
 ## Restore
 
 \`\`\`bash
@@ -152,7 +213,7 @@ For full documentation, configuration options, and scheduling, see the [official
 `;
 }
 
-export function writeRepoReadme(repository: string): void {
-  fs.writeFileSync(path.join(STAGING_DIR, "README.md"), repoReadme(repository));
+export function writeRepoReadme(repository: string, encrypted = false): void {
+  fs.writeFileSync(path.join(STAGING_DIR, "README.md"), repoReadme(repository, encrypted));
   logger.info("Wrote README.md to staging directory");
 }

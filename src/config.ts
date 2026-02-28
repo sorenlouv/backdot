@@ -21,6 +21,7 @@ const ConfigSchema = z.object({
   paths: z
     .array(z.string().min(1).transform(expandTilde))
     .min(1, '"paths" must be a non-empty array'),
+  encrypt: z.boolean().optional().default(false),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

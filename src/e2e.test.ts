@@ -339,3 +339,88 @@ describe("concurrent multi-machine backup", () => {
     fs.rmSync(verifyDir, { recursive: true, force: true });
   }, 60_000);
 });
+
+describe("encrypted backup and restore", () => {
+  let tempDir: string;
+  let remoteRepo: string;
+  let env: NodeJS.ProcessEnv;
+
+  const ZSHRC_CONTENT = "# encrypted zshrc test\n";
+  const PASSWORD = "test-e2e-password";
+
+  beforeAll(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-enc-"));
+
+    remoteRepo = path.join(tempDir, "remote.git");
+    execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+    fs.writeFileSync(path.join(tempDir, ".zshrc"), ZSHRC_CONTENT);
+
+    fs.writeFileSync(
+      path.join(tempDir, ".backdot.json"),
+      JSON.stringify(
+        {
+          repository: remoteRepo,
+          machine: "enc-machine",
+          paths: ["~/.zshrc"],
+          encrypt: true,
+        },
+        null,
+        2,
+      ),
+    );
+
+    env = {
+      ...testEnv(tempDir),
+      BACKDOT_PASSWORD: PASSWORD,
+    };
+  });
+
+  afterAll(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("backup encrypts files with .encrypted suffix in the remote repo", () => {
+    const output = run(["backup"], env);
+    expect(output).toContain("Backup complete");
+
+    const verifyDir = path.join(tempDir, "verify-clone");
+    cloneRemote(remoteRepo, verifyDir);
+
+    const plaintextFile = path.join(verifyDir, "enc-machine", ".zshrc");
+    expect(fs.existsSync(plaintextFile)).toBe(false);
+
+    const encryptedFile = path.join(verifyDir, "enc-machine", ".zshrc.encrypted");
+    expect(fs.existsSync(encryptedFile)).toBe(true);
+
+    const content = fs.readFileSync(encryptedFile);
+    expect(content.subarray(0, 4).toString()).toBe("BDOT");
+    expect(content.toString("utf-8")).not.toContain("encrypted zshrc test");
+
+    const readme = fs.readFileSync(path.join(verifyDir, "README.md"), "utf-8");
+    expect(readme).toContain("encrypted");
+
+    fs.rmSync(verifyDir, { recursive: true, force: true });
+  });
+
+  it("restore decrypts files back to plaintext", () => {
+    fs.unlinkSync(path.join(tempDir, ".zshrc"));
+    fs.unlinkSync(path.join(tempDir, ".backdot.json"));
+
+    const output = run(["restore", remoteRepo, "--yes"], env);
+    expect(output).toContain("Restored");
+
+    expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(ZSHRC_CONTENT);
+  });
+
+  it("backup with wrong password fails when repo has existing encrypted files", () => {
+    const wrongEnv = { ...env, BACKDOT_PASSWORD: "wrong-password" };
+
+    expect(() => run(["backup"], wrongEnv)).toThrow("Password does not match");
+  });
+
+  it("status works with encryption", () => {
+    const output = run(["status"], env);
+    expect(output).toContain("backed up");
+  });
+});

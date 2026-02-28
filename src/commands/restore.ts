@@ -8,6 +8,7 @@ import { gitPull } from "../git.js";
 import { STAGING_DIR, machineDir } from "../staging.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
+import { decryptBuffer, resolvePassword, offerToSaveKeyFile, ENC_SUFFIX } from "../crypto.js";
 
 const HOME = os.homedir();
 
@@ -116,7 +117,8 @@ export async function restore({
   }
 
   const fileMappings = stagedFiles.map((src) => {
-    const rel = path.relative(baseDir, src);
+    let rel = path.relative(baseDir, src);
+    if (rel.endsWith(ENC_SUFFIX)) {rel = rel.slice(0, -ENC_SUFFIX.length);}
     return { src, dest: path.join(HOME, rel), rel };
   });
 
@@ -169,13 +171,31 @@ export async function restore({
     return;
   }
 
+  let password: string | undefined;
+  const hasEncryptedFiles = toRestore.some(({ src }) => src.endsWith(ENC_SUFFIX));
+
+  if (hasEncryptedFiles) {
+    const result = await resolvePassword();
+    password = result.password;
+  }
+
   const copySpinner = ora("Restoring files").start();
   for (const { src, dest } of toRestore) {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.copyFileSync(src, dest);
+
+    if (password && src.endsWith(ENC_SUFFIX)) {
+      const content = fs.readFileSync(src);
+      fs.writeFileSync(dest, decryptBuffer(content, password));
+    } else {
+      fs.copyFileSync(src, dest);
+    }
   }
   copySpinner.succeed(`Restored ${pluralize(toRestore.length, "file")}`);
   console.log();
+
+  if (password) {
+    await offerToSaveKeyFile(password);
+  }
 
   logger.info(`Restored ${pluralize(toRestore.length, "file")}`);
 }

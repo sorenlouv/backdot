@@ -7,6 +7,7 @@ import { compareFiles } from "../staging.js";
 import { isScheduled } from "../launchd.js";
 import { pluralize } from "../utils.js";
 import { checkRepoVisibility, type RepoVisibility } from "../repoVisibility.js";
+import { resolvePassword } from "../crypto.js";
 
 function tildePath(filePath: string): string {
   const home = os.homedir();
@@ -34,6 +35,9 @@ export async function status(): Promise<void> {
   const config = loadConfig();
   console.log(`  Repo:        ${config.repository}`);
   console.log(`  Machine:     ${config.machine}`);
+  if (config.encrypt) {
+    console.log(`  Encryption:  ${chalk.green("enabled")}`);
+  }
 
   const visibilitySpinner = ora("Checking repository visibility").start();
   const visibility = await checkRepoVisibility(config.repository);
@@ -52,6 +56,12 @@ export async function status(): Promise<void> {
     return;
   }
 
+  let password: string | undefined;
+  if (config.encrypt) {
+    const result = await resolvePassword();
+    password = result.password;
+  }
+
   console.log();
 
   const spinner = ora("Resolving files").start();
@@ -67,11 +77,12 @@ export async function status(): Promise<void> {
     const files = [...userFiles, CONFIG_PATH];
 
     spinner.text = "Comparing with remote backup";
-    const { backedUp, modified, notBackedUp, error } = await compareFiles(
+    const { backedUp, modified, notBackedUp, error } = await compareFiles({
       files,
-      config.machine,
-      config.repository,
-    );
+      machine: config.machine,
+      repository: config.repository,
+      password,
+    });
     spinner.stop();
 
     if (error) {

@@ -7,6 +7,7 @@ vi.mock("node:fs", () => ({
     existsSync: vi.fn(),
     mkdirSync: vi.fn(),
     copyFileSync: vi.fn(),
+    readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
     readdirSync: vi.fn(),
     rmSync: vi.fn(),
@@ -39,6 +40,14 @@ vi.mock("./git.js", async () => {
     gitError: actual.gitError,
   };
 });
+
+const mockEncryptBuffer = vi.fn((buf: Buffer) => Buffer.concat([Buffer.from("ENCRYPTED:"), buf]));
+vi.mock("./crypto.js", () => ({
+  encryptBuffer: (...args: unknown[]) => mockEncryptBuffer(...(args as [Buffer])),
+  decryptBuffer: (buf: Buffer) => buf.subarray(10),
+  KEY_FILE_PATH: "/mock-home/.backdot.key",
+  ENC_SUFFIX: ".encrypted",
+}));
 
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -172,14 +181,14 @@ describe("compareFiles", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
 
-    const result = await compareFiles(files, MACHINE, REPO);
+    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
     expect(result.error).toContain("Backup repository not found");
     expect(result.notBackedUp).toEqual([]);
   });
 
   it("returns empty result for empty file list", async () => {
-    const result = await compareFiles([], MACHINE, REPO);
+    const result = await compareFiles({ files: [], machine: MACHINE, repository: REPO });
 
     expect(result.notBackedUp).toEqual([]);
     expect(result.backedUp).toEqual([]);
@@ -199,12 +208,11 @@ describe("compareFiles", () => {
       if (a[0] === "ls-tree") {
         return `100644 blob aaa111\t${zshrcPath}\n100644 blob bbb222\t${npmrcPath}\n`;
       }
-      // hash-object: return matching hash for .zshrc, different for .npmrc
       return "aaa111\nccc333\n";
     });
 
     const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
-    const result = await compareFiles(files, MACHINE, REPO);
+    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
     expect(result.backedUp).toEqual([`${HOME}/.zshrc`]);
     expect(result.modified).toEqual([`${HOME}/.npmrc`]);
@@ -225,7 +233,7 @@ describe("compareFiles", () => {
     });
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE, REPO);
+    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
     expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
     expect(result.backedUp).toEqual([]);
@@ -242,7 +250,7 @@ describe("compareFiles", () => {
     });
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE, REPO);
+    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
     expect(result.error).toContain("fatal: not a tree object");
   });
@@ -253,7 +261,7 @@ describe("compareFiles", () => {
     mockGit.revparse.mockRejectedValue(new Error("HEAD not found"));
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE, REPO);
+    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
     expect(result.error).toContain("HEAD not found");
   });
@@ -263,7 +271,7 @@ describe("compareFiles", () => {
     mockGit.fetch.mockRejectedValue(new Error("Could not resolve host"));
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE, REPO);
+    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
     expect(result.error).toBe("Could not connect to remote host. Check your internet connection.");
   });
@@ -273,10 +281,70 @@ describe("compareFiles", () => {
     mockGit.fetch.mockRejectedValue(new Error("remote: Repository not found."));
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles(files, MACHINE, REPO);
+    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
     expect(result.error).toBe(
       `Repository "${REPO}" not found. Check the URL and that you have access.`,
     );
+  });
+});
+
+describe("copyToStaging with encryption", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(Buffer.from("file content"));
+    mockEncryptBuffer.mockImplementation((buf: Buffer) =>
+      Buffer.concat([Buffer.from("ENCRYPTED:"), buf]),
+    );
+  });
+
+  it("encrypts files and appends .encrypted suffix when password is provided", () => {
+    const files = [`${HOME}/.zshrc`];
+    copyToStaging(files, MACHINE, "test-password");
+
+    expect(fs.readFileSync).toHaveBeenCalledWith(`${HOME}/.zshrc`);
+    expect(mockEncryptBuffer).toHaveBeenCalledWith(Buffer.from("file content"), "test-password");
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      getStagedPath(`${HOME}/.zshrc`, MACHINE) + ".encrypted",
+      expect.any(Buffer),
+    );
+  });
+
+  it("uses copyFileSync when no password is provided", () => {
+    const files = [`${HOME}/.zshrc`];
+    copyToStaging(files, MACHINE);
+
+    expect(mockEncryptBuffer).not.toHaveBeenCalled();
+    expect(fs.copyFileSync).toHaveBeenCalled();
+  });
+
+  it("excludes the key file from backup", () => {
+    const files = [`${HOME}/.zshrc`, "/mock-home/.backdot.key"];
+    copyToStaging(files, MACHINE, "test-password");
+
+    expect(mockEncryptBuffer).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("writeRepoReadme with encryption", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("includes encryption note when encrypted is true", () => {
+    writeRepoReadme(REPO, true);
+
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      path.join(STAGING_DIR, "README.md"),
+      expect.stringContaining("encrypted"),
+    );
+  });
+
+  it("does not include encryption note when encrypted is false", () => {
+    writeRepoReadme(REPO, false);
+
+    const content = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+    expect(content).not.toContain("encrypted");
   });
 });

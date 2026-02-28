@@ -54,6 +54,7 @@ export function init(): void {
   }
 
   console.log("  Open it and set your repository URL and files to back up.");
+  console.log(`  To encrypt backups, add ${chalk.bold('"encrypt": true')} to the config.`);
   console.log();
 
   // Step 3
