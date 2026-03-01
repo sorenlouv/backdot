@@ -1,8 +1,7 @@
 import { execFile } from "node:child_process";
+import { extractRepoPath } from "./utils.js";
 
 export type RepoVisibility = "public" | "private" | "unknown";
-
-const KNOWN_HOSTS = ["github.com", "gitlab.com", "bitbucket.org"];
 
 /**
  * Converts an SSH or HTTPS repo URL to a credential-free HTTPS URL
@@ -13,20 +12,11 @@ const KNOWN_HOSTS = ["github.com", "gitlab.com", "bitbucket.org"];
  *   https://github.com/user/repo  → https://github.com/user/repo.git
  */
 export function toHttpsUrl(repository: string): string | null {
-  for (const host of KNOWN_HOSTS) {
-    const idx = repository.indexOf(host);
-    if (idx === -1) {
-      continue;
-    }
-
-    let repoPath = repository.slice(idx + host.length + 1).trim();
-    if (!repoPath.endsWith(".git")) {
-      repoPath += ".git";
-    }
-
-    return `https://${host}/${repoPath}`;
+  const parsed = extractRepoPath(repository);
+  if (!parsed) {
+    return null;
   }
-  return null;
+  return `https://${parsed.host}/${parsed.repoPath}.git`;
 }
 
 /**

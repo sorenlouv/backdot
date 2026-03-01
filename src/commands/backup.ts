@@ -97,12 +97,12 @@ export async function backup(): Promise<void> {
             );
           }
           spinner.stop();
-          const reEncrypt = await confirm({
+          const shouldReEncrypt = await confirm({
             message:
               "Password does not match the existing backup. Re-encrypt all files with the new password?",
             default: false,
           });
-          if (!reEncrypt) {
+          if (!shouldReEncrypt) {
             throw new Error("Backup aborted.");
           }
           spinner.start();

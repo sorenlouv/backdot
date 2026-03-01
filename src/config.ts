@@ -39,14 +39,14 @@ export function loadConfig(): Config {
     throw new Error(`Failed to read config file: ${CONFIG_PATH}`);
   }
 
-  let parsed: unknown;
+  let parsedJson: unknown;
   try {
-    parsed = JSON.parse(rawJson);
+    parsedJson = JSON.parse(rawJson);
   } catch {
     throw new Error(`Invalid JSON in config file: ${CONFIG_PATH}`);
   }
 
-  const result = ConfigSchema.safeParse(parsed);
+  const result = ConfigSchema.safeParse(parsedJson);
   if (!result.success) {
     const messages = result.error.issues.map((issue) => {
       const field = issue.path.length > 0 ? `"${issue.path.join(".")}"` : "config";

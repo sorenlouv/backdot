@@ -6,8 +6,8 @@ import ora from "ora";
 import { logger } from "./log.js";
 import { errorMessage } from "./utils.js";
 
-function escapeXml(s: string): string {
-  return s
+function escapeXml(text: string): string {
+  return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

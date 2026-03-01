@@ -18,8 +18,8 @@ import { sendNotification } from "./notify.js";
 function getVersion(): string {
   const pkgPath = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../package.json");
   try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-    return pkg.version ?? "unknown";
+    const packageJson = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    return packageJson.version ?? "unknown";
   } catch {
     return "unknown";
   }

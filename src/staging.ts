@@ -125,7 +125,25 @@ export async function compareFiles(opts: {
   }
 
   if (derivedKey) {
-    return compareFilesEncrypted(files, machine, remoteBlobHashes, derivedKey);
+    return compareFilesToRemote(
+      files,
+      machine,
+      remoteBlobHashes,
+      ENC_SUFFIX,
+      (file, remoteBlobHash) => {
+        try {
+          const blobContent = execFileSync("git", ["cat-file", "blob", remoteBlobHash], {
+            cwd: STAGING_DIR,
+            maxBuffer: 50 * 1024 * 1024,
+          });
+          const decrypted = decrypt(blobContent, derivedKey);
+          const localContent = fs.readFileSync(file);
+          return decrypted.equals(localContent);
+        } catch {
+          return false;
+        }
+      },
+    );
   }
 
   let localFileHashes: string[];
@@ -139,57 +157,30 @@ export async function compareFiles(opts: {
     return failedComparisonResult(err);
   }
 
-  return files.reduce<ComparisonResult>(
-    (result, file, i) => {
-      const repoRelPath = path.relative(STAGING_DIR, getStagedPath(file, machine));
-      const remoteBlobHash = remoteBlobHashes.get(repoRelPath);
-
-      if (!remoteBlobHash) {
-        result.notBackedUp.push(file);
-      } else if (remoteBlobHash === localFileHashes[i]) {
-        result.backedUp.push(file);
-      } else {
-        result.modified.push(file);
-      }
-
-      return result;
-    },
-    { backedUp: [], modified: [], notBackedUp: [] },
-  );
+  const localHashByFile = new Map(files.map((file, i) => [file, localFileHashes[i]]));
+  return compareFilesToRemote(files, machine, remoteBlobHashes, "", (file, remoteBlobHash) => {
+    return remoteBlobHash === localHashByFile.get(file);
+  });
 }
 
-function compareFilesEncrypted(
+function compareFilesToRemote(
   files: string[],
   machine: string,
   remoteBlobHashes: Map<string, string>,
-  derivedKey: DerivedKey,
+  pathSuffix: string,
+  matchesRemote: (file: string, remoteBlobHash: string) => boolean,
 ): ComparisonResult {
   const result: ComparisonResult = { backedUp: [], modified: [], notBackedUp: [] };
 
   for (const file of files) {
-    const repoRelPath = path.relative(STAGING_DIR, getStagedPath(file, machine)) + ENC_SUFFIX;
-    const remoteBlobHash = remoteBlobHashes.get(repoRelPath);
+    const repoRelativePath = path.relative(STAGING_DIR, getStagedPath(file, machine)) + pathSuffix;
+    const remoteBlobHash = remoteBlobHashes.get(repoRelativePath);
 
     if (!remoteBlobHash) {
       result.notBackedUp.push(file);
-      continue;
-    }
-
-    try {
-      const blobContent = execFileSync("git", ["cat-file", "blob", remoteBlobHash], {
-        cwd: STAGING_DIR,
-        maxBuffer: 50 * 1024 * 1024,
-      });
-
-      const decrypted = decrypt(blobContent, derivedKey);
-      const localContent = fs.readFileSync(file);
-
-      if (decrypted.equals(localContent)) {
-        result.backedUp.push(file);
-      } else {
-        result.modified.push(file);
-      }
-    } catch {
+    } else if (matchesRemote(file, remoteBlobHash)) {
+      result.backedUp.push(file);
+    } else {
       result.modified.push(file);
     }
   }

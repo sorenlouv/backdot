@@ -11,15 +11,15 @@ export function sendNotification(title: string, message: string): void {
     return;
   }
 
-  const escaped = escapeAppleScript(message);
-  const titleEscaped = escapeAppleScript(title);
+  const escapedMessage = escapeAppleScript(message);
+  const escapedTitle = escapeAppleScript(title);
 
   try {
     execFileSync(
       "osascript",
       [
         "-e",
-        `display notification "${escaped}" with title "${titleEscaped}" subtitle "Scheduled backup failed"`,
+        `display notification "${escapedMessage}" with title "${escapedTitle}" subtitle "Scheduled backup failed"`,
       ],
       { stdio: "pipe" },
     );

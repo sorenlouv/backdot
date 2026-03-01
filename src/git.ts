@@ -77,8 +77,8 @@ export async function getCurrentBranch(git: SimpleGit): Promise<string> {
   return (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
 }
 
-export function friendlyGitError(raw: string, repository: string): string {
-  const normalizedMessage = raw.toLowerCase();
+export function friendlyGitError(rawErrorMessage: string, repository: string): string {
+  const normalizedMessage = rawErrorMessage.toLowerCase();
   if (
     normalizedMessage.includes("not found") ||
     normalizedMessage.includes("does not exist") ||
@@ -99,7 +99,7 @@ export function friendlyGitError(raw: string, repository: string): string {
   ) {
     return "Could not connect to remote host. Check your internet connection.";
   }
-  return raw;
+  return rawErrorMessage;
 }
 
 export function gitError(err: unknown, repository: string): Error {
@@ -144,8 +144,8 @@ export async function gitLog(
   limit = 20,
 ): Promise<Array<{ hash: string; date: string; message: string }>> {
   const git = simpleGit(STAGING_DIR);
-  const log = await git.log({ maxCount: limit });
-  return log.all.map((entry) => ({
+  const logResult = await git.log({ maxCount: limit });
+  return logResult.all.map((entry) => ({
     hash: entry.hash,
     date: entry.date,
     message: entry.message,
@@ -166,6 +166,8 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } |
   const message = buildCommitMessage(status);
   await git.commit(message);
 
+  const remoteUrl = ((await git.remote(["get-url", "origin"])) ?? "").trim();
+
   try {
     await pRetry(async () => git.push(["-u", "origin", "HEAD"]), {
       retries: 5,
@@ -184,14 +186,12 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } |
       },
     });
   } catch (err) {
-    const remoteUrl = ((await git.remote(["get-url", "origin"])) ?? "").trim();
     throw gitError(err, remoteUrl);
   }
 
   logger.info(`Committed and pushed: ${message}`);
 
   const commitHash = (await git.revparse(["HEAD"])).trim();
-  const remoteUrl = (await git.remote(["get-url", "origin"])) ?? "";
   const commitUrl = getCommitUrl(remoteUrl, commitHash);
   return { commitUrl };
 }

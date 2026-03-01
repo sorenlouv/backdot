@@ -17,23 +17,24 @@ const SCRYPT_PARAMS = {
 };
 const OVERHEAD = SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH;
 
+/** An encryption key derived from the user's password via scrypt. */
 export interface DerivedKey {
-  password: string;
+  passwordHash: string;
   salt: Buffer;
   key: Buffer;
 }
 
-export function deriveKey(password: string, salt?: Buffer): DerivedKey {
+export function deriveKey(passwordHash: string, salt?: Buffer): DerivedKey {
   const resolvedSalt = salt ?? crypto.randomBytes(SALT_LENGTH);
-  const key = crypto.scryptSync(password, resolvedSalt, KEY_LENGTH, SCRYPT_PARAMS);
-  return { password, salt: resolvedSalt, key };
+  const key = crypto.scryptSync(passwordHash, resolvedSalt, KEY_LENGTH, SCRYPT_PARAMS);
+  return { passwordHash, salt: resolvedSalt, key };
 }
 
 function deriveKeyForSalt(derivedKey: DerivedKey, salt: Buffer): Buffer {
   if (derivedKey.salt.equals(salt)) {
     return derivedKey.key;
   }
-  return crypto.scryptSync(derivedKey.password, salt, KEY_LENGTH, SCRYPT_PARAMS);
+  return crypto.scryptSync(derivedKey.passwordHash, salt, KEY_LENGTH, SCRYPT_PARAMS);
 }
 
 export function encrypt(plaintext: Buffer, derivedKey: DerivedKey): Buffer {
@@ -46,16 +47,19 @@ export function encrypt(plaintext: Buffer, derivedKey: DerivedKey): Buffer {
   return Buffer.concat([derivedKey.salt, iv, authTag, ciphertext]);
 }
 
-export function decrypt(encrypted: Buffer, derivedKey: DerivedKey): Buffer {
-  if (encrypted.length < OVERHEAD) {
+export function decrypt(encryptedPayload: Buffer, derivedKey: DerivedKey): Buffer {
+  if (encryptedPayload.length < OVERHEAD) {
     throw new Error("Data is too short to be encrypted content.");
   }
 
   let offset = 0;
-  const salt = encrypted.subarray(offset, (offset += SALT_LENGTH));
-  const iv = encrypted.subarray(offset, (offset += IV_LENGTH));
-  const authTag = encrypted.subarray(offset, (offset += AUTH_TAG_LENGTH));
-  const ciphertext = encrypted.subarray(offset);
+  const salt = encryptedPayload.subarray(offset, offset + SALT_LENGTH);
+  offset += SALT_LENGTH;
+  const iv = encryptedPayload.subarray(offset, offset + IV_LENGTH);
+  offset += IV_LENGTH;
+  const authTag = encryptedPayload.subarray(offset, offset + AUTH_TAG_LENGTH);
+  offset += AUTH_TAG_LENGTH;
+  const ciphertext = encryptedPayload.subarray(offset);
 
   const key = deriveKeyForSalt(derivedKey, salt);
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);

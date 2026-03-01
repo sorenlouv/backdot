@@ -63,7 +63,7 @@ async function resolveRepoAndMachine(
     machine = await select({
       message: "Multiple machines found. Which one do you want to restore?",
       loop: false,
-      choices: machines.map((m) => ({ name: m, value: m })),
+      choices: machines.map((machine) => ({ name: machine, value: machine })),
     });
   }
 
@@ -84,7 +84,7 @@ export async function restore({
   const { repository, machine } = await resolveRepoAndMachine(repoUrl, commit);
 
   const spinner = ora("Fetching latest backup").start();
-  const baseDir = machineDir(machine);
+  const machineStagingDir = machineDir(machine);
 
   try {
     if (!repoUrl) {
@@ -96,33 +96,33 @@ export async function restore({
   }
   spinner.text = "Resolving files";
 
-  if (!fs.existsSync(baseDir)) {
+  if (!fs.existsSync(machineStagingDir)) {
     spinner.stop();
-    const available = listMachines();
-    if (available.length > 0) {
+    const availableMachines = listMachines();
+    if (availableMachines.length > 0) {
       console.log(`\n  No backup found for machine "${machine}".`);
-      console.log(`  Available machines: ${available.join(", ")}\n`);
+      console.log(`  Available machines: ${availableMachines.join(", ")}\n`);
     } else {
       console.log(`\n  No backup found for machine "${machine}". The repository is empty.\n`);
     }
     return;
   }
 
-  const stagedFiles = listFilesRecursively(baseDir);
-  logger.info(`Found ${pluralize(stagedFiles.length, "file")} in backup repository`);
+  const backupFiles = listFilesRecursively(machineStagingDir);
+  logger.info(`Found ${pluralize(backupFiles.length, "file")} in backup repository`);
 
-  if (stagedFiles.length === 0) {
+  if (backupFiles.length === 0) {
     spinner.stop();
     console.log("No files found in backup repository.");
     return;
   }
 
-  const fileMappings = stagedFiles.map((stagedFilePath) => {
-    let relativePath = path.relative(baseDir, stagedFilePath);
+  const fileMappings = backupFiles.map((backupFilePath) => {
+    let relativePath = path.relative(machineStagingDir, backupFilePath);
     if (relativePath.endsWith(ENC_SUFFIX)) {
       relativePath = relativePath.slice(0, -ENC_SUFFIX.length);
     }
-    return { src: stagedFilePath, dest: path.join(HOME, relativePath), rel: relativePath };
+    return { src: backupFilePath, dest: path.join(HOME, relativePath), relativePath };
   });
 
   const filesAlreadyOnDisk = fileMappings.filter((file) => fs.existsSync(file.dest));
@@ -150,7 +150,7 @@ export async function restore({
     if (newFiles.length > 0) {
       choices.push(new Separator(`── New files (${newFiles.length}) ──`));
       for (const file of newFiles) {
-        choices.push({ name: file.rel, value: file, checked: true });
+        choices.push({ name: file.relativePath, value: file, checked: true });
       }
     }
 
@@ -159,7 +159,7 @@ export async function restore({
         new Separator(`── Existing files — will overwrite (${filesAlreadyOnDisk.length}) ──`),
       );
       for (const file of filesAlreadyOnDisk) {
-        choices.push({ name: file.rel, value: file, checked: false });
+        choices.push({ name: file.relativePath, value: file, checked: false });
       }
     }
 
