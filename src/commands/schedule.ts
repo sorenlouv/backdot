@@ -21,7 +21,7 @@ export function schedule(): void {
     if (config.encrypt && !fs.existsSync(KEY_FILE_PATH)) {
       console.log(
         chalk.yellow(
-          `  Encryption is enabled. Run ${chalk.bold("backdot backup")} once to create ~/.backdot.key,\n` +
+          `  Encryption is enabled. Run ${chalk.bold("backdot backup")} once to create ${KEY_FILE_PATH},\n` +
             `  or set ${chalk.bold("BACKDOT_PASSWORD")} in your environment.\n`,
         ),
       );

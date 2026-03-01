@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -42,7 +43,8 @@ describe("resolvePassword", () => {
     const { resolvePassword } = await import("./password.js");
     const result = await resolvePassword();
 
-    expect(result.password).toBe("env-password");
-    expect(result.interactive).toBe(false);
+    const expectedHash = crypto.createHash("sha256").update("env-password").digest("hex");
+    expect(result.password).toBe(expectedHash);
+    expect(result.source).toBe("env");
   });
 });

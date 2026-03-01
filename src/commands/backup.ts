@@ -8,6 +8,7 @@ import { gitPull, gitCommitAndPush } from "../git.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
 import { checkRepoVisibility } from "../repoVisibility.js";
+import { confirm } from "@inquirer/prompts";
 import { decrypt, deriveKey, type DerivedKey } from "../crypto/encryption.js";
 import {
   resolvePassword,
@@ -42,12 +43,15 @@ export async function backup(): Promise<void> {
 
   let password: string | undefined;
   let derivedKey: DerivedKey | undefined;
-  let passwordWasInteractive = false;
 
   if (config.encrypt) {
     const result = await resolvePassword();
     password = result.password;
-    passwordWasInteractive = result.interactive;
+
+    if (result.source === "prompt") {
+      await confirmPassword(password);
+    }
+
     derivedKey = deriveKey(password);
   }
 
@@ -85,13 +89,24 @@ export async function backup(): Promise<void> {
         try {
           decrypt(encryptedContent, derivedKey);
         } catch {
-          spinner.fail("Backup failed");
-          throw new Error("Password does not match the existing backup.");
+          if (!process.stdin.isTTY) {
+            spinner.fail("Backup failed");
+            throw new Error(
+              "Password does not match the existing backup.\n" +
+                "Run interactively to re-encrypt with a new password.",
+            );
+          }
+          spinner.stop();
+          const reEncrypt = await confirm({
+            message:
+              "Password does not match the existing backup. Re-encrypt all files with the new password?",
+            default: false,
+          });
+          if (!reEncrypt) {
+            throw new Error("Backup aborted.");
+          }
+          spinner.start();
         }
-      } else if (passwordWasInteractive) {
-        spinner.stop();
-        await confirmPassword(password!);
-        spinner.start();
       }
     }
 

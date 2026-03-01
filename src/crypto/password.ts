@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -5,6 +6,10 @@ import { password as passwordPrompt, confirm } from "@inquirer/prompts";
 
 export const KEY_FILE_PATH = path.join(os.homedir(), ".backdot.key");
 export const ENC_SUFFIX = ".encrypted";
+
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password).digest("hex");
+}
 
 export function checkKeyFilePermissions(): void {
   if (process.platform === "win32") {
@@ -37,25 +42,27 @@ function readKeyFile(): string | null {
   return fs.readFileSync(KEY_FILE_PATH, "utf-8").trimEnd();
 }
 
+export type PasswordSource = "env" | "file" | "prompt";
+
 export interface PasswordResult {
   password: string;
-  interactive: boolean;
+  source: PasswordSource;
 }
 
 export async function resolvePassword(): Promise<PasswordResult> {
   const envPassword = process.env.BACKDOT_PASSWORD;
   if (envPassword) {
-    return { password: envPassword, interactive: false };
+    return { password: hashPassword(envPassword), source: "env" };
   }
 
   const filePassword = readKeyFile();
   if (filePassword) {
-    return { password: filePassword, interactive: false };
+    return { password: filePassword, source: "file" };
   }
 
   if (!process.stdin.isTTY) {
     throw new Error(
-      'Encryption is enabled but no password found.\n  Run "backdot backup" interactively to create ~/.backdot.key, or set BACKDOT_PASSWORD.',
+      `Encryption is enabled but no password found.\n  Run "backdot backup" interactively to create ${KEY_FILE_PATH}, or set BACKDOT_PASSWORD.`,
     );
   }
 
@@ -64,12 +71,12 @@ export async function resolvePassword(): Promise<PasswordResult> {
     throw new Error("No password provided.");
   }
 
-  return { password: enteredPassword, interactive: true };
+  return { password: hashPassword(enteredPassword), source: "prompt" };
 }
 
-export async function confirmPassword(password: string): Promise<void> {
+export async function confirmPassword(hashedPassword: string): Promise<void> {
   const confirmedPassword = await passwordPrompt({ message: "Confirm password:" });
-  if (confirmedPassword !== password) {
+  if (hashPassword(confirmedPassword) !== hashedPassword) {
     throw new Error("Passwords do not match.");
   }
 }
@@ -86,7 +93,7 @@ export async function offerToSaveKeyFile(password: string): Promise<void> {
   }
 
   const save = await confirm({
-    message: "Save password to ~/.backdot.key for automated backups?",
+    message: `Save password to ${KEY_FILE_PATH} for automated backups?`,
     default: true,
   });
 
