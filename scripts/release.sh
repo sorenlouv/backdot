@@ -31,16 +31,16 @@ if [[ -n $(git status --porcelain) ]]; then
   exit 1
 fi
 
-# ── Build & Validate ────────────────────────────────────────────────────────
+# ── Validate & Test ──────────────────────────────────────────────────────────
 
-echo "Building…"
-npm run build
+echo "Checking formatting…"
+npm run fmt:check
 
 echo "Linting…"
 npm run lint
 
-echo "Running tests…"
-npm run test
+echo "Building and running all tests…"
+npm run test:all
 
 # ── Version Bump ─────────────────────────────────────────────────────────────
 
