@@ -1,33 +1,98 @@
 import SwiftUI
 
 struct ConfigWindow: View {
+    @EnvironmentObject var pathsProvider: PathsProvider
     @EnvironmentObject var configManager: ConfigManager
+    @EnvironmentObject var statusProvider: StatusProvider
+    @EnvironmentObject var cliRunner: BackdotCLI
     @StateObject private var passwordManager = PasswordManager()
     @StateObject private var repoValidator = RepoValidator()
 
     @State private var newPathText = ""
     @State private var passwordInput = ""
+    @State private var scheduleLoading = false
+
+    @FocusState private var repoFieldFocused: Bool
+    @FocusState private var machineFieldFocused: Bool
 
     var body: some View {
+        Group {
+            switch statusProvider.selectedTab {
+            case .configuration:
+                configurationTab
+            case .logs:
+                LogsView(cliLogPath: pathsProvider.paths.cliLog)
+            }
+        }
+        .frame(width: 520, height: 540)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("", selection: $statusProvider.selectedTab) {
+                    ForEach(WindowTab.allCases, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+            }
+        }
+        .onAppear {
+            NSApp.setActivationPolicy(.regular)
+            if let iconURL = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+               let icon = NSImage(contentsOf: iconURL) {
+                NSApp.applicationIconImage = icon
+            }
+            if pathsProvider.loaded {
+                configManager.configPath = pathsProvider.paths.configFile
+            }
+            configManager.load()
+            statusProvider.refresh()
+            repoValidator.validate(configManager.config.repository)
+        }
+        .onChange(of: pathsProvider.loaded) { loaded in
+            if loaded {
+                configManager.configPath = pathsProvider.paths.configFile
+                configManager.load()
+            }
+        }
+        .onDisappear {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    private var configurationTab: some View {
         VStack(spacing: 0) {
             Form {
                 generalSection
                 pathsSection
                 encryptionSection
+                scheduleSection
             }
             .formStyle(.grouped)
 
-            footer
-        }
-        .frame(width: 520, height: 540)
-        .onAppear {
-            NSApp.setActivationPolicy(.regular)
-            configManager.load()
-            passwordManager.refresh()
-            repoValidator.validate(configManager.config.repository)
-        }
-        .onDisappear {
-            NSApp.setActivationPolicy(.accessory)
+            HStack {
+                if let error = configManager.loadError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                if configManager.showSavedIndicator {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Saved")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: configManager.showSavedIndicator)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
         }
     }
 
@@ -38,15 +103,31 @@ struct ConfigWindow: View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
                 TextField("Repository", text: $configManager.config.repository, prompt: Text("git@github.com:user/repo.git"))
+                    .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
-                    .onChange(of: configManager.config.repository, perform: { newValue in
+                    .focused($repoFieldFocused)
+                    .onChange(of: configManager.config.repository) { newValue in
                         repoValidator.validate(newValue)
-                    })
+                        configManager.autoSaveDebounced()
+                    }
+                    .onChange(of: repoFieldFocused) { focused in
+                        if !focused { configManager.autoSave() }
+                    }
+                    .onSubmit { configManager.autoSave() }
 
                 repoStatusLabel
             }
 
             TextField("Machine", text: $configManager.config.machine, prompt: Text("my-laptop"))
+                .textFieldStyle(.roundedBorder)
+                .focused($machineFieldFocused)
+                .onChange(of: configManager.config.machine) { _ in
+                    configManager.autoSaveDebounced()
+                }
+                .onChange(of: machineFieldFocused) { focused in
+                    if !focused { configManager.autoSave() }
+                }
+                .onSubmit { configManager.autoSave() }
         } header: {
             Text("General")
         }
@@ -106,9 +187,10 @@ struct ConfigWindow: View {
                         withAnimation {
                             _ = configManager.config.paths.remove(at: index as Int)
                         }
+                        configManager.autoSave()
                     } label: {
                         Image(systemName: "trash")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                     .help("Remove path")
@@ -117,6 +199,7 @@ struct ConfigWindow: View {
 
             HStack {
                 TextField("Add path…", text: $newPathText, prompt: Text("~/.config/example"))
+                    .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
                     .onSubmit { addPath() }
 
@@ -124,7 +207,7 @@ struct ConfigWindow: View {
                     addPath()
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
                 .disabled(newPathText.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -145,23 +228,29 @@ struct ConfigWindow: View {
         Section {
             Toggle("Encrypt backups", isOn: Binding(
                 get: { configManager.config.encryptEnabled },
-                set: { configManager.config.encryptEnabled = $0 }
+                set: {
+                    configManager.config.encryptEnabled = $0
+                    configManager.autoSave()
+                }
             ))
 
             if configManager.config.encryptEnabled {
-                if passwordManager.hasKeyFile {
+                if statusProvider.passwordFileExists {
                     HStack {
                         Label("Password saved", systemImage: "key.fill")
                             .foregroundStyle(.green)
 
                         Spacer()
 
-                        Text("~/.backdot.key")
+                        Text(pathsProvider.displayKeyFilePath)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.secondary)
 
                         Button("Remove", role: .destructive) {
-                            try? passwordManager.removeKeyFile()
+                            Task {
+                                await passwordManager.removeKeyFile()
+                                statusProvider.refresh()
+                            }
                         }
                         .controlSize(.small)
                     }
@@ -173,11 +262,16 @@ struct ConfigWindow: View {
 
                         HStack {
                             SecureField("Encryption password", text: $passwordInput)
+                                .textFieldStyle(.roundedBorder)
 
                             Button("Save Password") {
                                 guard !passwordInput.isEmpty else { return }
-                                try? passwordManager.savePassword(passwordInput)
+                                let pw = passwordInput
                                 passwordInput = ""
+                                Task {
+                                    await passwordManager.savePassword(pw)
+                                    statusProvider.refresh()
+                                }
                             }
                             .controlSize(.small)
                             .disabled(passwordInput.isEmpty)
@@ -190,40 +284,39 @@ struct ConfigWindow: View {
         }
     }
 
-    // MARK: - Footer
+    // MARK: - Schedule
 
     @ViewBuilder
-    private var footer: some View {
-        HStack {
-            Button("Revert") {
-                configManager.load()
-                passwordManager.refresh()
-                repoValidator.validate(configManager.config.repository)
-                newPathText = ""
-                passwordInput = ""
+    private var scheduleSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { statusProvider.isScheduled },
+                set: { enable in
+                    scheduleLoading = true
+                    Task {
+                        let result = enable
+                            ? await cliRunner.schedule()
+                            : await cliRunner.unschedule()
+                        if !result.success {
+                            UILogger.log("Schedule \(enable ? "enable" : "disable") failed: \(result.message)")
+                        }
+                        statusProvider.refresh()
+                        scheduleLoading = false
+                    }
+                }
+            )) {
+                HStack(spacing: 6) {
+                    Text("Daily backup at 02:00")
+                    if scheduleLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
             }
-            .controlSize(.large)
-
-            Spacer()
-
-            if let error = configManager.loadError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            Button("Save") {
-                configManager.save()
-            }
-            .controlSize(.large)
-            .keyboardShortcut(.defaultAction)
+            .disabled(scheduleLoading)
+        } header: {
+            Text("Schedule")
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(.bar)
     }
 
     // MARK: - Helpers
@@ -235,5 +328,6 @@ struct ConfigWindow: View {
             configManager.config.paths.append(trimmed)
         }
         newPathText = ""
+        configManager.autoSave()
     }
 }

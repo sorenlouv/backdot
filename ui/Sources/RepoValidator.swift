@@ -15,7 +15,6 @@ class RepoValidator: ObservableObject {
     @Published var status: RepoStatus = .idle
 
     private var debounceTask: Task<Void, Never>?
-    private static let knownHosts = ["github.com", "gitlab.com", "bitbucket.org"]
 
     func validate(_ repository: String) {
         debounceTask?.cancel()
@@ -36,65 +35,29 @@ class RepoValidator: ObservableObject {
     }
 
     private static func checkRepository(_ repository: String) async -> RepoStatus {
-        let authenticated = await runGitLsRemote(repository, anonymous: false)
-        if !authenticated {
-            return .notFound("Repository not found or not accessible")
+        let (output, exitCode) = await BackdotCLI.run(["ui:check-repo", repository])
+
+        guard exitCode == 0 else {
+            return .notFound("backdot CLI error")
         }
 
-        guard let httpsUrl = toHttpsUrl(repository) else {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let data = trimmed.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let status = json["status"] as? String else {
             return .unknownVisibility
         }
 
-        let anonymous = await runGitLsRemote(httpsUrl, anonymous: true)
-        return anonymous ? .publicRepo : .privateRepo
-    }
-
-    /// Converts an SSH or HTTPS repo URL to an anonymous HTTPS URL for known hosts.
-    private static func toHttpsUrl(_ repository: String) -> String? {
-        for host in knownHosts {
-            guard let idx = repository.range(of: host) else { continue }
-            let afterHost = repository[idx.upperBound...]
-            guard let first = afterHost.first else { continue }
-            // Skip the separator: ":" for SSH or "/" for HTTPS
-            guard first == ":" || first == "/" else { continue }
-            var repoPath = String(afterHost.dropFirst()).trimmingCharacters(in: .whitespaces)
-            if repoPath.hasSuffix(".git") {
-                repoPath = String(repoPath.dropLast(4))
-            }
-            return "https://\(host)/\(repoPath).git"
-        }
-        return nil
-    }
-
-    private static func runGitLsRemote(_ url: String, anonymous: Bool) async -> Bool {
-        await withCheckedContinuation { continuation in
-            let process = Process()
-            let pipe = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-
-            if anonymous {
-                process.arguments = ["-c", "credential.helper=", "ls-remote", "--quiet", url]
-            } else {
-                process.arguments = ["ls-remote", "--quiet", url]
-            }
-
-            process.standardOutput = pipe
-            process.standardError = pipe
-
-            var env = ProcessInfo.processInfo.environment
-            env["GIT_TERMINAL_PROMPT"] = "0"
-            let extraPaths = ["/usr/local/bin", "/opt/homebrew/bin"]
-            let existingPath = env["PATH"] ?? "/usr/bin:/bin"
-            env["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
-            process.environment = env
-
-            do {
-                try process.run()
-                process.waitUntilExit()
-                continuation.resume(returning: process.terminationStatus == 0)
-            } catch {
-                continuation.resume(returning: false)
-            }
+        switch status {
+        case "private":
+            return .privateRepo
+        case "public":
+            return .publicRepo
+        case "not_found":
+            let message = json["message"] as? String ?? "Repository not found or not accessible"
+            return .notFound(message)
+        default:
+            return .unknownVisibility
         }
     }
 }

@@ -7,7 +7,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "BackdotUI",
-            path: "Sources"
+            path: "Sources",
+            resources: [.process("Resources")]
         ),
     ]
 )

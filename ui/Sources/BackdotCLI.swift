@@ -14,7 +14,7 @@ class BackdotCLI: ObservableObject {
 
     /// Resolves the full path to the `backdot` executable by searching common
     /// Node.js install locations and the user's shell PATH.
-    private func resolveBackdotPath() -> String? {
+    nonisolated static func resolveBackdotPath() -> String? {
         let commonPaths = [
             "/usr/local/bin/backdot",
             "/opt/homebrew/bin/backdot",
@@ -27,16 +27,31 @@ class BackdotCLI: ObservableObject {
             }
         }
 
-        let result = Self.shell("/bin/zsh", arguments: ["-l", "-c", "which backdot"])
+        let result = shell("/bin/zsh", arguments: ["-l", "-c", "which backdot"])
         let p = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
         return p.isEmpty ? nil : p
+    }
+
+    /// Runs a `backdot` CLI command and returns its output and exit code.
+    /// Resolves the backdot executable path automatically.
+    static func run(_ arguments: [String], stdinData: String? = nil) async -> (output: String, exitCode: Int32) {
+        guard let backdotPath = resolveBackdotPath() else {
+            return ("backdot not found on PATH", 1)
+        }
+        let path = backdotPath
+        let args = arguments
+        let input = stdinData
+        return await Task.detached {
+            let result = shell(path, arguments: args, stdinData: input)
+            return (result.output, result.exitCode)
+        }.value
     }
 
     func runBackup() {
         guard backupState != .running else { return }
         backupState = .running
 
-        guard let backdotPath = resolveBackdotPath() else {
+        guard let backdotPath = Self.resolveBackdotPath() else {
             backupState = .failure("backdot not found on PATH")
             return
         }
@@ -56,7 +71,7 @@ class BackdotCLI: ObservableObject {
     }
 
     func schedule() async -> (success: Bool, message: String) {
-        guard let backdotPath = resolveBackdotPath() else {
+        guard let backdotPath = Self.resolveBackdotPath() else {
             return (false, "backdot not found on PATH")
         }
         let result = Self.shell(backdotPath, arguments: ["schedule"])
@@ -64,7 +79,7 @@ class BackdotCLI: ObservableObject {
     }
 
     func unschedule() async -> (success: Bool, message: String) {
-        guard let backdotPath = resolveBackdotPath() else {
+        guard let backdotPath = Self.resolveBackdotPath() else {
             return (false, "backdot not found on PATH")
         }
         let result = Self.shell(backdotPath, arguments: ["unschedule"])
@@ -76,13 +91,20 @@ class BackdotCLI: ObservableObject {
         let exitCode: Int32
     }
 
-    private nonisolated static func shell(_ path: String, arguments: [String] = []) -> ShellResult {
+    private nonisolated static func shell(_ path: String, arguments: [String] = [], stdinData: String? = nil) -> ShellResult {
         let process = Process()
-        let pipe = Pipe()
+        let outPipe = Pipe()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
-        process.standardOutput = pipe
-        process.standardError = pipe
+        process.standardOutput = outPipe
+        process.standardError = outPipe
+
+        if let stdinData, let data = stdinData.data(using: .utf8) {
+            let inPipe = Pipe()
+            process.standardInput = inPipe
+            inPipe.fileHandleForWriting.write(data)
+            inPipe.fileHandleForWriting.closeFile()
+        }
 
         var env = ProcessInfo.processInfo.environment
         let extraPaths = ["/usr/local/bin", "/opt/homebrew/bin"]
@@ -93,7 +115,7 @@ class BackdotCLI: ObservableObject {
         do {
             try process.run()
             process.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(data: data, encoding: .utf8) ?? ""
             return ShellResult(output: output, exitCode: process.terminationStatus)
         } catch {

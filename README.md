@@ -13,7 +13,7 @@ npm install -g backdot
 backdot init
 ```
 
-This creates `~/.backdot.json` with sensible defaults and walks you through setup. Open the config file and set your repository URL and the files you want backed up:
+This creates `~/.backdot/config.json` with sensible defaults and walks you through setup. Open the config file and set your repository URL and the files you want backed up:
 
 ```json
 {
@@ -53,7 +53,7 @@ Prefix a pattern with `!` to exclude matching files:
 
 To encrypt files before they are pushed to the remote repo, add `"encrypt": true` to your config.
 
-On first backup you'll be prompted for a password and offered to save it to `~/.backdot.key` so that future backups do not prompt for a password.
+On first backup you'll be prompted for a password and offered to save it to `~/.backdot/encryption.key` so that future backups do not prompt for a password.
 
 ## Commands
 
@@ -71,10 +71,22 @@ On first backup you'll be prompted for a password and offered to save it to `~/.
 
 ## Development
 
+### CLI
+
 ```bash
+cd cli
 npm install
 npm run build
 npm start
+```
+
+### macOS UI
+
+Requires Swift 5.9+ and macOS 13+.
+
+```bash
+ui/scripts/build.sh   # build release binary
+ui/scripts/run.sh     # build and launch
 ```
 
 ## License

@@ -31,42 +31,66 @@ struct BackdotConfig: Codable, Equatable {
 
 @MainActor
 class ConfigManager: ObservableObject {
-    static let configPath = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".backdot.json")
+    var configPath = ""
 
     @Published var config: BackdotConfig = .empty
     @Published var loadError: String?
+    @Published var showSavedIndicator = false
 
-    init() {
-        load()
-    }
+    private var debouncedSaveWorkItem: DispatchWorkItem?
 
     func load() {
         loadError = nil
 
-        guard FileManager.default.fileExists(atPath: Self.configPath.path) else {
+        guard !configPath.isEmpty else {
+            loadError = "Waiting for paths…"
+            return
+        }
+
+        guard FileManager.default.fileExists(atPath: configPath) else {
             loadError = "Config not found. Run \"backdot init\" first."
             return
         }
 
         do {
-            let data = try Data(contentsOf: Self.configPath)
-            let decoder = JSONDecoder()
-            config = try decoder.decode(BackdotConfig.self, from: data)
+            let data = try Data(contentsOf: URL(fileURLWithPath: configPath))
+            config = try JSONDecoder().decode(BackdotConfig.self, from: data)
         } catch {
             loadError = "Failed to read config: \(error.localizedDescription)"
         }
     }
 
     func save() {
+        guard !configPath.isEmpty else { return }
+
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             let data = try encoder.encode(config)
-            try data.write(to: Self.configPath, options: .atomic)
+            try data.write(to: URL(fileURLWithPath: configPath), options: .atomic)
             loadError = nil
+            showSavedIndicator = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.showSavedIndicator = false
+            }
         } catch {
             loadError = "Failed to save config: \(error.localizedDescription)"
+            showSavedIndicator = false
         }
+    }
+
+    func autoSave() {
+        debouncedSaveWorkItem?.cancel()
+        debouncedSaveWorkItem = nil
+        save()
+    }
+
+    func autoSaveDebounced(after delay: TimeInterval = 1.0) {
+        debouncedSaveWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.save()
+        }
+        debouncedSaveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 }

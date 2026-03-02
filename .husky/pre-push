@@ -1,3 +1,3 @@
-npm run lint
-npm run fmt:check
-npm run test:all
+npm --prefix cli run lint
+npm --prefix cli run fmt:check
+npm --prefix cli run test:all

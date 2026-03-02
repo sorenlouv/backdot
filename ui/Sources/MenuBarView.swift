@@ -7,16 +7,33 @@ struct MenuBarMenu: View {
 
     @Environment(\.openWindow) private var openWindow
 
-    @State private var scheduleLoading = false
+    @State private var pollingTimer: Timer?
 
     var body: some View {
-        statusItems
-        Divider()
-        actionItems
-        Divider()
-        configItem
-        Divider()
-        quitItem
+        Group {
+            statusItems
+            Divider()
+            actionItems
+            Divider()
+            configItem
+            Divider()
+            quitItem
+        }
+        .onAppear {
+            statusProvider.refreshLastBackup()
+            pollingTimer?.invalidate()
+            let timer = Timer(timeInterval: 1, repeats: true) { _ in
+                Task { @MainActor in
+                    statusProvider.refreshLastBackup()
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            pollingTimer = timer
+        }
+        .onDisappear {
+            pollingTimer?.invalidate()
+            pollingTimer = nil
+        }
     }
 
     // MARK: - Status
@@ -30,11 +47,23 @@ struct MenuBarMenu: View {
             Button("Machine: \(configManager.config.machine)") {}
                 .disabled(true)
 
-            Button(lastBackupText) {}
-                .disabled(true)
+            if let commitUrl = statusProvider.lastBackupCommitUrl {
+                Button(lastBackupText) {
+                    NSWorkspace.shared.open(commitUrl)
+                }
+            } else {
+                Button(lastBackupText) {}
+                    .disabled(true)
+            }
 
-            Button(scheduleText) {}
-                .disabled(true)
+            if statusProvider.lastBackupSuccess == false {
+                Button("View Logs…") {
+                    statusProvider.selectedTab = .logs
+                    openWindow(id: "config")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            }
+
         }
     }
 
@@ -49,10 +78,6 @@ struct MenuBarMenu: View {
         return success ? "Last backup: \(relative)" : "Last backup: failed \(relative)"
     }
 
-    private var scheduleText: String {
-        statusProvider.isScheduled ? "Schedule: daily at 02:00" : "Schedule: off"
-    }
-
     // MARK: - Actions
 
     @ViewBuilder
@@ -62,20 +87,6 @@ struct MenuBarMenu: View {
             cliRunner.runBackup()
         }
         .disabled(isRunning || configManager.loadError != nil)
-
-        Button(statusProvider.isScheduled ? "Remove Schedule" : "Schedule Daily Backup") {
-            scheduleLoading = true
-            Task {
-                if statusProvider.isScheduled {
-                    _ = await cliRunner.unschedule()
-                } else {
-                    _ = await cliRunner.schedule()
-                }
-                statusProvider.refresh()
-                scheduleLoading = false
-            }
-        }
-        .disabled(scheduleLoading || configManager.loadError != nil)
     }
 
     // MARK: - Config

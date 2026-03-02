@@ -10,7 +10,7 @@ The target user is an individual developer who wants to back up personal config 
 
 ## Core Concepts
 
-**Config file** (`~/.backdot.json`) has four fields:
+**Config file** (`~/.backdot/config.json`) has four fields:
 
 | Field        | Required | Description                                      |
 | ------------ | -------- | ------------------------------------------------ |
@@ -21,13 +21,13 @@ The target user is an individual developer who wants to back up personal config 
 
 **Machine isolation.** Each machine's files are stored under a `<machine>/` directory in the repo. Two machines sharing the same repo must never interfere with each other. Breaking this isolation would be a critical bug.
 
-**Config always backed up.** `~/.backdot.json` is automatically included in every backup so that `restore` works on a blank machine with zero prior setup.
+**Config always backed up.** `~/.backdot/config.json` is automatically included in every backup so that `restore` works on a blank machine with zero prior setup.
 
 ## Commands
 
 ### `init`
 
-Creates `~/.backdot.json` with sensible defaults. Never overwrites an existing config. Shows deep links to create a private repo on GitHub, GitLab, and Bitbucket, and prints next-step commands.
+Creates `~/.backdot/config.json` with sensible defaults. Never overwrites an existing config. Shows deep links to create a private repo on GitHub, GitLab, and Bitbucket, and prints next-step commands.
 
 ### `backup`
 
@@ -88,13 +88,13 @@ Shows help. Nudges toward `init` if no config file exists.
 - Prefix a pattern with `!` to exclude matching files (e.g. `!~/.config/app/secret.key`).
 - `~` is expanded to the user's home directory, including inside negation patterns.
 - Unreadable files and files larger than 10 MB are silently skipped (logged as warnings).
-- Duplicate matches are deduplicated. The key file (`~/.backdot.key`) is always excluded.
+- Duplicate matches are deduplicated. The key file (`~/.backdot/encryption.key`) is always excluded.
 
 ## Encryption
 
 - Opt-in via `"encrypt": true`. Files are encrypted before pushing so sensitive data is protected if the repo is compromised.
-- Password lookup: `~/.backdot.key` file > interactive prompt. Non-interactive mode without a password fails with a clear error.
-- On first backup the user is prompted to confirm the password and offered to save it to `~/.backdot.key`. On subsequent backups the password is verified against the repo before proceeding.
+- Password lookup: `~/.backdot/encryption.key` file > interactive prompt. Non-interactive mode without a password fails with a clear error.
+- On first backup the user is prompted to confirm the password and offered to save it to `~/.backdot/encryption.key`. On subsequent backups the password is verified against the repo before proceeding.
 - The key file requires restrictive permissions (no group/other access) and is never included in backups -- if the user loses their machine they must remember the password to restore.
 
 ## Repository Visibility Check
@@ -116,7 +116,7 @@ On macOS, a system notification is shown when a scheduled (background) backup fa
 
 ## Logging
 
-All operations are logged to `~/.backdot/backup.log` for debugging.
+All operations are logged to `~/.backdot/logs/cli.log` for debugging.
 
 ## Scheduling
 
@@ -134,6 +134,10 @@ These behaviors are intentional and must be preserved:
 - **Non-destructive restore.** New files are auto-selected; existing files require explicit opt-in. `--yes` skips existing files entirely.
 - **Key file never backed up.** The encryption password file is always excluded from backups.
 - **Public repo backup refused.** Backup is blocked when the repo is publicly accessible.
+
+## macOS Menu Bar App
+
+A native SwiftUI menu bar app provides quick access to backup status and configuration. It must look indistinguishable from a first-party macOS application -- simple, clean, and using only native system controls. The menu bar dropdown shows status and a "Back Up Now" action. A settings window (opened from the menu) allows editing configuration, managing encryption, toggling the schedule, and viewing logs.
 
 ## Explicitly Removed Features
 
