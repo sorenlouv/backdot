@@ -23,11 +23,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: cli/package-lock.json
 
       - run: npm ci
+        working-directory: cli
       - run: npm run lint
+        working-directory: cli
       - run: npm run fmt:check
+        working-directory: cli
       - run: npm run build
+        working-directory: cli
       - run: npm test
+        working-directory: cli
       - run: npm run test:integration
+        working-directory: cli
       - run: npm run test:e2e
+        working-directory: cli
