@@ -1,0 +1,55 @@
+{
+  "": {
+    "dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotUI.d",
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotUI.o",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/master.swiftdeps"
+  },
+  "/Users/sorenlouv/dev/backdot/ui/Sources/BackdotApp.swift": {
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotApp.swift.o",
+    "swiftmodule": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotApp.swiftdeps",
+    "diagnostics": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotApp.dia"
+  },
+  "/Users/sorenlouv/dev/backdot/ui/Sources/BackdotCLI.swift": {
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotCLI.swift.o",
+    "swiftmodule": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotCLI~partial.swiftmodule",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotCLI.swiftdeps",
+    "diagnostics": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/BackdotCLI.dia"
+  },
+  "/Users/sorenlouv/dev/backdot/ui/Sources/ConfigManager.swift": {
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/ConfigManager.swift.o",
+    "swiftmodule": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/ConfigManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/ConfigManager.swiftdeps",
+    "diagnostics": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/ConfigManager.dia"
+  },
+  "/Users/sorenlouv/dev/backdot/ui/Sources/ConfigWindow.swift": {
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/ConfigWindow.swift.o",
+    "swiftmodule": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/ConfigWindow~partial.swiftmodule",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/ConfigWindow.swiftdeps",
+    "diagnostics": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/ConfigWindow.dia"
+  },
+  "/Users/sorenlouv/dev/backdot/ui/Sources/MenuBarView.swift": {
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/MenuBarView.swift.o",
+    "swiftmodule": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/MenuBarView~partial.swiftmodule",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/MenuBarView.swiftdeps",
+    "diagnostics": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/MenuBarView.dia"
+  },
+  "/Users/sorenlouv/dev/backdot/ui/Sources/PasswordManager.swift": {
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/PasswordManager.swift.o",
+    "swiftmodule": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/PasswordManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/PasswordManager.swiftdeps",
+    "diagnostics": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/PasswordManager.dia"
+  },
+  "/Users/sorenlouv/dev/backdot/ui/Sources/RepoValidator.swift": {
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/RepoValidator.swift.o",
+    "swiftmodule": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/RepoValidator~partial.swiftmodule",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/RepoValidator.swiftdeps",
+    "diagnostics": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/RepoValidator.dia"
+  },
+  "/Users/sorenlouv/dev/backdot/ui/Sources/StatusProvider.swift": {
+    "object": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/StatusProvider.swift.o",
+    "swiftmodule": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/StatusProvider~partial.swiftmodule",
+    "swift-dependencies": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/StatusProvider.swiftdeps",
+    "diagnostics": "/Users/sorenlouv/dev/backdot/ui/.build/arm64-apple-macosx/release/BackdotUI.build/StatusProvider.dia"
+  }
+}

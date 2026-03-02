@@ -37,7 +37,9 @@
     "test:all": "npm run build && vitest run",
     "test:e2e": "npm run build && vitest run src/e2e.test.ts",
     "test:integration": "vitest run src/git.integration.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:ui": "cd ui && swift build -c release",
+    "ui": "cd ui && swift build -c release && .build/release/BackdotUI"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.3.0",
