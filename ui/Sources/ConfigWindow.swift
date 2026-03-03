@@ -15,13 +15,19 @@ struct ConfigWindow: View {
     @FocusState private var repoFieldFocused: Bool
     @FocusState private var machineFieldFocused: Bool
 
+    @State private var retrying = false
+
     var body: some View {
         Group {
-            switch statusProvider.selectedTab {
-            case .configuration:
-                configurationTab
-            case .logs:
-                LogsView(cliLogPath: pathsProvider.paths.cliLog)
+            if pathsProvider.cliError != nil {
+                cliNotFoundView
+            } else {
+                switch statusProvider.selectedTab {
+                case .configuration:
+                    configurationTab
+                case .logs:
+                    LogsView(cliLogPath: pathsProvider.paths.cliLog)
+                }
             }
         }
         .frame(width: 520, height: 540)
@@ -59,6 +65,73 @@ struct ConfigWindow: View {
             NSApp.setActivationPolicy(.accessory)
         }
     }
+
+    // MARK: - CLI Not Found
+
+    private var cliNotFoundView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+
+            Text("Backdot CLI not found")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            Text("The app could not locate the backdot command-line tool.\nInstall it with:")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Text("npm install -g backdot")
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.quaternary)
+                    .cornerRadius(6)
+            }
+
+            Button {
+                retrying = true
+                Task {
+                    await pathsProvider.load()
+                    retrying = false
+                }
+            } label: {
+                if retrying {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 50)
+                } else {
+                    Text("Retry")
+                        .frame(width: 50)
+                }
+            }
+            .disabled(retrying)
+
+            DisclosureGroup("Searched locations") {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(BackdotCLI.searchedPaths, id: \.self) { path in
+                        Text(path)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+            }
+            .frame(width: 360)
+            .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding()
+    }
+
+    // MARK: - Configuration
 
     private var configurationTab: some View {
         VStack(spacing: 0) {

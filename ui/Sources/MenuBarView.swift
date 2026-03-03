@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MenuBarMenu: View {
+    @EnvironmentObject var pathsProvider: PathsProvider
     @EnvironmentObject var configManager: ConfigManager
     @EnvironmentObject var statusProvider: StatusProvider
     @EnvironmentObject var cliRunner: BackdotCLI
@@ -11,9 +12,13 @@ struct MenuBarMenu: View {
 
     var body: some View {
         Group {
-            statusItems
-            Divider()
-            actionItems
+            if pathsProvider.cliError != nil {
+                cliErrorItems
+            } else {
+                statusItems
+                Divider()
+                actionItems
+            }
             Divider()
             configItem
             Divider()
@@ -33,6 +38,18 @@ struct MenuBarMenu: View {
         .onDisappear {
             pollingTimer?.invalidate()
             pollingTimer = nil
+        }
+    }
+
+    // MARK: - CLI Error
+
+    @ViewBuilder
+    private var cliErrorItems: some View {
+        Button("CLI not found") {}
+            .disabled(true)
+        Button("Open Settings to see details…") {
+            openWindow(id: "config")
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 

@@ -20,14 +20,19 @@ struct BackdotPaths: Codable, Equatable {
 class PathsProvider: ObservableObject {
     @Published var paths = BackdotPaths.empty
     @Published var loaded = false
+    @Published var cliError: String?
 
     init() {
         Task { await load() }
     }
 
     func load() async {
+        cliError = nil
         let (output, exitCode) = await BackdotCLI.run(["ui:paths"])
-        guard exitCode == 0 else { return }
+        guard exitCode == 0 else {
+            cliError = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            return
+        }
 
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let data = trimmed.data(using: .utf8),
