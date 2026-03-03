@@ -1,3 +1,5 @@
 /.DS_Store
-/dist
-/node_modules
+/build
+/cli/dist
+/cli/node_modules
+/ui/.build

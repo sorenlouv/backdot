@@ -68,7 +68,7 @@ export async function status(): Promise<void> {
     const userFiles = resolveFiles(config);
 
     if (userFiles.length === 0) {
-      spinner.warn("No files resolved. Check your ~/.backdot.json entries.");
+      spinner.warn("No files resolved. Check your ~/.backdot/config.json entries.");
       console.log();
       return;
     }

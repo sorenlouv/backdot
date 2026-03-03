@@ -58,12 +58,12 @@ describe("backdot init", () => {
     fs.rmSync(initDir, { recursive: true, force: true });
   });
 
-  it("creates ~/.backdot.json with defaults", () => {
+  it("creates ~/.backdot/config.json with defaults", () => {
     const output = run(["init"], initEnv);
     expect(output).toContain("Welcome to backdot");
-    expect(output).toContain(".backdot.json with defaults");
+    expect(output).toContain("config.json with defaults");
 
-    const configPath = path.join(initDir, ".backdot.json");
+    const configPath = path.join(initDir, ".backdot", "config.json");
     expect(fs.existsSync(configPath)).toBe(true);
 
     const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
@@ -77,7 +77,7 @@ describe("backdot init", () => {
   });
 
   it("does not overwrite existing config on second run", () => {
-    const configPath = path.join(initDir, ".backdot.json");
+    const configPath = path.join(initDir, ".backdot", "config.json");
     const before = fs.readFileSync(configPath, "utf-8");
 
     const output = run(["init"], initEnv);
@@ -107,8 +107,9 @@ describe("backdot e2e", () => {
     fs.mkdirSync(path.join(tempDir, ".config", "test"), { recursive: true });
     fs.writeFileSync(path.join(tempDir, ".config", "test", "settings.json"), SETTINGS_CONTENT);
 
+    fs.mkdirSync(path.join(tempDir, ".backdot"), { recursive: true });
     fs.writeFileSync(
-      path.join(tempDir, ".backdot.json"),
+      path.join(tempDir, ".backdot", "config.json"),
       JSON.stringify(
         {
           repository: remoteRepo,
@@ -143,7 +144,9 @@ describe("backdot e2e", () => {
     expect(
       fs.existsSync(path.join(verifyDir, "test-machine", ".config", "test", "settings.json")),
     ).toBe(true);
-    expect(fs.existsSync(path.join(verifyDir, "test-machine", ".backdot.json"))).toBe(true);
+    expect(fs.existsSync(path.join(verifyDir, "test-machine", ".backdot", "config.json"))).toBe(
+      true,
+    );
     expect(fs.existsSync(path.join(verifyDir, "README.md"))).toBe(true);
 
     expect(fs.readFileSync(path.join(verifyDir, "test-machine", ".zshrc"), "utf-8")).toBe(
@@ -186,7 +189,7 @@ describe("backdot e2e", () => {
   it("restore recovers deleted files", () => {
     fs.unlinkSync(path.join(tempDir, ".zshrc"));
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
-    fs.unlinkSync(path.join(tempDir, ".backdot.json"));
+    fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
     const output = run(["restore", remoteRepo, "--yes"], env);
     expect(output).toContain("Restored");
@@ -208,7 +211,7 @@ describe("backdot e2e", () => {
 
     fs.unlinkSync(path.join(tempDir, ".zshrc"));
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
-    fs.unlinkSync(path.join(tempDir, ".backdot.json"));
+    fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
     const output = run(["restore", remoteRepo, "--commit", firstCommitSha, "--yes"], env);
     expect(output).toContain("Restored");
@@ -234,8 +237,9 @@ describe("negation patterns", () => {
     fs.writeFileSync(path.join(tempDir, ".config", "app", "secret.key"), "supersecret\n");
     fs.writeFileSync(path.join(tempDir, ".config", "app", "cache.tmp"), "cached\n");
 
+    fs.mkdirSync(path.join(tempDir, ".backdot"), { recursive: true });
     fs.writeFileSync(
-      path.join(tempDir, ".backdot.json"),
+      path.join(tempDir, ".backdot", "config.json"),
       JSON.stringify(
         {
           repository: remoteRepo,
@@ -294,10 +298,10 @@ describe("concurrent multi-machine backup", () => {
 
     for (const m of machines) {
       const homeDir = path.join(tempDir, m.name);
-      fs.mkdirSync(homeDir, { recursive: true });
+      fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
       fs.writeFileSync(path.join(homeDir, m.file), m.content);
       fs.writeFileSync(
-        path.join(homeDir, ".backdot.json"),
+        path.join(homeDir, ".backdot", "config.json"),
         JSON.stringify(
           { repository: remoteRepo, machine: m.name, paths: [`~/${m.file}`] },
           null,
@@ -360,8 +364,9 @@ describe("encrypted backup and restore", () => {
 
     fs.writeFileSync(path.join(tempDir, ".zshrc"), ZSHRC_CONTENT);
 
+    fs.mkdirSync(path.join(tempDir, ".backdot"), { recursive: true });
     fs.writeFileSync(
-      path.join(tempDir, ".backdot.json"),
+      path.join(tempDir, ".backdot", "config.json"),
       JSON.stringify(
         {
           repository: remoteRepo,
@@ -409,7 +414,7 @@ describe("encrypted backup and restore", () => {
 
   it("restore decrypts files back to plaintext", () => {
     fs.unlinkSync(path.join(tempDir, ".zshrc"));
-    fs.unlinkSync(path.join(tempDir, ".backdot.json"));
+    fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
     const output = run(["restore", remoteRepo, "--yes"], env);
     expect(output).toContain("Restored");

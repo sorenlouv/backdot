@@ -50,7 +50,7 @@ vi.mock("./crypto/encryption.js", () => ({
 }));
 
 vi.mock("./crypto/password.js", () => ({
-  KEY_FILE_PATH: "/mock-home/.backdot.key",
+  KEY_FILE_PATH: "/mock-home/.backdot/encryption.key",
   ENC_SUFFIX: ".encrypted",
 }));
 
@@ -325,7 +325,7 @@ describe("copyToStaging with encryption", () => {
   });
 
   it("excludes the key file from backup", () => {
-    const files = [`${HOME}/.zshrc`, "/mock-home/.backdot.key"];
+    const files = [`${HOME}/.zshrc`, "/mock-home/.backdot/encryption.key"];
     copyToStaging(files, MACHINE, mockDerivedKey);
 
     expect(mockEncrypt).toHaveBeenCalledTimes(1);

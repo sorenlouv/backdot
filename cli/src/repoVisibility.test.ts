@@ -97,4 +97,37 @@ describe("checkRepoVisibility", () => {
     expect(result).toBe("unknown");
     expect(mockedExecFile).not.toHaveBeenCalled();
   });
+
+  it("strips GIT_ASKPASS and SSH_ASKPASS from the child process env", async () => {
+    const savedAskpass = process.env.GIT_ASKPASS;
+    const savedSshAskpass = process.env.SSH_ASKPASS;
+    process.env.GIT_ASKPASS = "/fake/ide/askpass.sh";
+    process.env.SSH_ASKPASS = "/fake/ide/ssh-askpass.sh";
+
+    try {
+      mockedExecFile.mockImplementation(
+        (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
+          cb(null, "", "");
+          return { stdin: { end() {} } } as ReturnType<typeof execFile>;
+        },
+      );
+
+      await checkRepoVisibility("git@github.com:user/repo.git");
+
+      const opts = mockedExecFile.mock.calls[0][2] as { env: Record<string, unknown> };
+      expect(opts.env.GIT_ASKPASS).toBeUndefined();
+      expect(opts.env.SSH_ASKPASS).toBeUndefined();
+    } finally {
+      if (savedAskpass === undefined) {
+        delete process.env.GIT_ASKPASS;
+      } else {
+        process.env.GIT_ASKPASS = savedAskpass;
+      }
+      if (savedSshAskpass === undefined) {
+        delete process.env.SSH_ASKPASS;
+      } else {
+        process.env.SSH_ASKPASS = savedSshAskpass;
+      }
+    }
+  });
 });

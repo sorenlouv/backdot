@@ -44,7 +44,12 @@ function execGitLsRemote(url: string): Promise<void> {
       ["-c", "credential.helper=", "ls-remote", "--quiet", url],
       {
         timeout: 10_000,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        env: {
+          ...process.env,
+          GIT_TERMINAL_PROMPT: "0",
+          GIT_ASKPASS: undefined,
+          SSH_ASKPASS: undefined,
+        },
       },
       (error) => {
         if (error) {
