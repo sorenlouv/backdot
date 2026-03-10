@@ -16,7 +16,7 @@ describe("saveKeyFile / checkKeyFilePermissions", () => {
   });
 
   it("saveKeyFile writes password with restricted permissions", () => {
-    const keyPath = path.join(tmpDir, ".backdot.key");
+    const keyPath = path.join(tmpDir, "encryption.key");
 
     fs.writeFileSync(keyPath, "test-password\n", { mode: 0o600 });
 

@@ -11,6 +11,12 @@ import { schedule, unschedule } from "./commands/schedule.js";
 import { restore } from "./commands/restore.js";
 import { history } from "./commands/history.js";
 import { init } from "./commands/init.js";
+import { checkRepo } from "./commands/checkRepo.js";
+import { getScheduleAndEncryptionFileStatus } from "./commands/getScheduleAndEncryptionFileStatus.js";
+import { getLastBackupTimestamp } from "./commands/getLastBackupTimestamp.js";
+import { setPassword } from "./commands/setPassword.js";
+import { removePasswordFile } from "./commands/removePassword.js";
+import { printPaths } from "./commands/paths.js";
 import { logger } from "./log.js";
 import { errorMessage } from "./utils.js";
 import { sendNotification } from "./notify.js";
@@ -53,6 +59,30 @@ cli.command("unschedule", "Unschedule the daily backup").action(() => unschedule
 
 cli.command("status", "Show the status of the backup").action(async () => {
   await status();
+});
+
+cli.command("ui:check-repo <url>", "").action(async (url: string) => {
+  await checkRepo(url);
+});
+
+cli.command("ui:get-schedule-and-encryption-file-status", "").action(() => {
+  getScheduleAndEncryptionFileStatus();
+});
+
+cli.command("ui:get-last-backup-timestamp", "").action(() => {
+  getLastBackupTimestamp();
+});
+
+cli.command("ui:set-password", "").action(async () => {
+  await setPassword();
+});
+
+cli.command("ui:remove-password-file", "").action(() => {
+  removePasswordFile();
+});
+
+cli.command("ui:paths", "").action(() => {
+  printPaths();
 });
 
 cli.command("", "").action(() => {

@@ -30,14 +30,16 @@
     "fmt:check": "prettier --check src/",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "prepare": "husky",
+    "prepare": "cd .. && husky",
     "release": "./scripts/release.sh",
     "start": "node dist/cli.js",
     "test": "vitest run --exclude src/e2e.test.ts --exclude src/git.integration.test.ts",
     "test:all": "npm run build && vitest run",
     "test:e2e": "npm run build && vitest run src/e2e.test.ts",
     "test:integration": "vitest run src/git.integration.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:ui": "../ui/scripts/build.sh",
+    "ui": "../ui/scripts/run.sh"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.3.0",
@@ -56,6 +58,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.13.5",
+    "esbuild": "^0.27.3",
     "eslint": "^10.0.2",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",

@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { z } from "zod";
+import { CONFIG_PATH } from "./paths.js";
 
-export const CONFIG_PATH = path.join(os.homedir(), ".backdot.json");
+export { CONFIG_PATH };
 
 export function expandTilde(pattern: string): string {
   // fast-glob uses "!" for negation patterns — preserve the prefix, expand the rest

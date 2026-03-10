@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("node:fs", () => ({
   default: {
     existsSync: vi.fn(),
+    mkdirSync: vi.fn(),
     writeFileSync: vi.fn(),
   },
 }));
@@ -28,7 +29,7 @@ describe("init", () => {
 
     expect(fs.writeFileSync).toHaveBeenCalledOnce();
     const [filePath, content] = vi.mocked(fs.writeFileSync).mock.calls[0] as [string, string];
-    expect(filePath).toContain(".backdot.json");
+    expect(filePath).toContain("config.json");
 
     const parsed = JSON.parse(content);
     expect(parsed.repository).toBe("git@github.com:USERNAME/backdot-backup.git");

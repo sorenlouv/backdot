@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import os from "node:os";
 import chalk from "chalk";
 import { CONFIG_PATH } from "../config.js";
@@ -49,6 +50,7 @@ export function init(): void {
   if (fs.existsSync(CONFIG_PATH)) {
     console.log(`  ${chalk.yellow(`${CONFIG_PATH} already exists — skipping creation.`)}`);
   } else {
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n");
     console.log(`  Created ${CONFIG_PATH} with defaults.`);
   }

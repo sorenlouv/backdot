@@ -5,6 +5,7 @@ import os from "node:os";
 import ora from "ora";
 import { logger } from "./log.js";
 import { errorMessage } from "./utils.js";
+import { LOG_DIR, LAUNCHD_LOG_PATH } from "./paths.js";
 
 function escapeXml(text: string): string {
   return text
@@ -26,8 +27,6 @@ function buildPlist(): string {
   const nodePath = process.execPath;
   const scriptPath = getScriptPath();
   const workingDir = path.dirname(scriptPath);
-  const logPath = path.join(os.homedir(), ".backdot", "launchd.log");
-
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -50,9 +49,9 @@ function buildPlist(): string {
     <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>${escapeXml(logPath)}</string>
+  <string>${escapeXml(LAUNCHD_LOG_PATH)}</string>
   <key>StandardErrorPath</key>
-  <string>${escapeXml(logPath)}</string>
+  <string>${escapeXml(LAUNCHD_LOG_PATH)}</string>
   <key>RunAtLoad</key>
   <false/>
 </dict>
@@ -79,9 +78,8 @@ export function setupLaunchd(): void {
 
   const plistContent = buildPlist();
   const launchAgentsDir = path.dirname(PLIST_PATH);
-  if (!fs.existsSync(launchAgentsDir)) {
-    fs.mkdirSync(launchAgentsDir, { recursive: true });
-  }
+  fs.mkdirSync(launchAgentsDir, { recursive: true });
+  fs.mkdirSync(LOG_DIR, { recursive: true });
 
   try {
     execFileSync("launchctl", ["unload", PLIST_PATH], { stdio: "pipe" });

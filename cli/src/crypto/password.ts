@@ -1,13 +1,12 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
-import os from "node:os";
 import { password as passwordPrompt, confirm } from "@inquirer/prompts";
+import { KEY_FILE_PATH } from "../paths.js";
 
-export const KEY_FILE_PATH = path.join(os.homedir(), ".backdot.key");
+export { KEY_FILE_PATH };
 export const ENC_SUFFIX = ".encrypted";
 
-function hashPassword(password: string): string {
+export function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
 
