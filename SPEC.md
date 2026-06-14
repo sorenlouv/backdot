@@ -38,7 +38,7 @@ Resolves files from config, refuses if the repo is public, syncs with the remote
 Works with or without an existing config:
 
 - **With config:** uses the configured repo and machine.
-- **With a URL argument:** clones the repo and discovers available machines. If multiple machines exist, the user picks one. This makes restore self-bootstrapping on a blank machine.
+- **With a URL argument:** clones the repo and discovers available machines. If multiple machines exist, the user picks one interactively (or names one with `--machine`). This makes restore self-bootstrapping on a blank machine, with no pre-existing config required.
 
 Files are shown in an interactive picker:
 
@@ -47,6 +47,7 @@ Files are shown in an interactive picker:
 
 Options:
 
+- `--machine <name>` selects which machine to restore, without the interactive picker. Required when multiple machines exist and there is no interactive terminal (otherwise restore errors and lists the available machines). If the name is unknown, restore fails and lists the available machines. With a config, `--machine` overrides the configured machine; the repository still comes from config.
 - `--commit <sha>` restores from a specific earlier backup.
 - `--yes` (`-y`) accepts defaults without prompting. With `--yes`, only new files are restored; existing files are skipped.
 

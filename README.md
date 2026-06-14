@@ -64,6 +64,7 @@ On first backup you'll be prompted for a password and offered to save it to `~/.
 | `restore`                      | Restore latest backup from the configured repo |
 | `restore <url>`                | Restore from a specific repo URL               |
 | `restore [url] --commit <sha>` | Restore from a specific backup commit          |
+| `restore [url] --machine <name>` | Restore a specific machine non-interactively |
 | `history [url]`                | Browse and restore a previous backup           |
 | `schedule`                     | Schedule automatic daily backup (Mac-only)     |
 | `unschedule`                   | Unschedule the daily backup                    |

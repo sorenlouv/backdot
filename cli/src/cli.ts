@@ -35,11 +35,22 @@ cli.command("backup", "Run a backup now").action(async () => {
 
 cli
   .command("restore [url]", "Restore files")
+  .option("--machine <name>", "Restore a specific machine (skips the picker)")
   .option("--commit <sha>", "Restore from a specific backup commit")
   .option("-y, --yes", "Accept defaults without prompting")
-  .action(async (url: string | undefined, options: { commit?: string; yes?: boolean }) => {
-    await restore({ repoUrl: url, commit: options.commit, yes: !!options.yes });
-  });
+  .action(
+    async (
+      url: string | undefined,
+      options: { machine?: string; commit?: string; yes?: boolean },
+    ) => {
+      await restore({
+        repoUrl: url,
+        commit: options.commit,
+        yes: !!options.yes,
+        machine: options.machine,
+      });
+    },
+  );
 
 cli
   .command("history [url]", "List and restore a previous backup")

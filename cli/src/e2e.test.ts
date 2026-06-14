@@ -527,3 +527,91 @@ describe("status before first backup", () => {
     }
   });
 });
+
+describe("restore --machine", () => {
+  let tempDir: string;
+  let remoteRepo: string;
+
+  const machines = [
+    { name: "laptop", file: ".zshrc", content: "# laptop\n" },
+    { name: "server", file: ".bashrc", content: "# server\n" },
+  ];
+
+  // Captures the failure message of a command expected to exit non-zero.
+  function failureOutput(args: string[], env: NodeJS.ProcessEnv): string {
+    try {
+      run(args, env);
+    } catch (err) {
+      return (err as Error).message;
+    }
+    throw new Error("expected the command to fail, but it succeeded");
+  }
+
+  beforeAll(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-machineflag-"));
+    remoteRepo = path.join(tempDir, "remote.git");
+    execSync(`git init --bare -b main "${remoteRepo}"`, { stdio: "ignore" });
+
+    for (const m of machines) {
+      const homeDir = path.join(tempDir, m.name);
+      fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
+      fs.writeFileSync(path.join(homeDir, m.file), m.content);
+      fs.writeFileSync(
+        path.join(homeDir, ".backdot", "config.json"),
+        JSON.stringify(
+          { repository: remoteRepo, machine: m.name, paths: [`~/${m.file}`] },
+          null,
+          2,
+        ),
+      );
+      run(["backup"], testEnv(homeDir));
+    }
+  });
+
+  afterAll(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("restores the named machine into a config-less HOME", () => {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    try {
+      const output = run(
+        ["restore", remoteRepo, "--machine", "server", "--yes"],
+        testEnv(freshHome),
+      );
+      expect(output).toContain("Restored");
+      expect(fs.readFileSync(path.join(freshHome, ".bashrc"), "utf-8")).toBe("# server\n");
+      expect(fs.existsSync(path.join(freshHome, ".zshrc"))).toBe(false);
+    } finally {
+      fs.rmSync(freshHome, { recursive: true, force: true });
+    }
+  });
+
+  it("errors and lists machines when --machine names an unknown machine", () => {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    try {
+      const message = failureOutput(
+        ["restore", remoteRepo, "--machine", "nope", "--yes"],
+        testEnv(freshHome),
+      );
+      expect(message).toContain('No backup found for machine "nope"');
+      expect(message).toContain("laptop");
+      expect(message).toContain("server");
+    } finally {
+      fs.rmSync(freshHome, { recursive: true, force: true });
+    }
+  });
+
+  it("errors and lists machines when multiple exist, no --machine, and no TTY", () => {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    try {
+      const message = failureOutput(["restore", remoteRepo, "--yes"], testEnv(freshHome));
+      expect(message).toContain("Multiple machines found");
+      expect(message).toContain("--machine");
+      expect(message).toContain("laptop");
+      expect(message).toContain("server");
+    } finally {
+      fs.rmSync(freshHome, { recursive: true, force: true });
+    }
+  });
+});
