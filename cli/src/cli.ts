@@ -11,12 +11,6 @@ import { schedule, unschedule } from "./commands/schedule.js";
 import { restore } from "./commands/restore.js";
 import { history } from "./commands/history.js";
 import { init } from "./commands/init.js";
-import { checkRepo } from "./commands/checkRepo.js";
-import { getScheduleAndEncryptionFileStatus } from "./commands/getScheduleAndEncryptionFileStatus.js";
-import { getLastBackupTimestamp } from "./commands/getLastBackupTimestamp.js";
-import { setPassword } from "./commands/setPassword.js";
-import { removePasswordFile } from "./commands/removePassword.js";
-import { printPaths } from "./commands/paths.js";
 import { logger } from "./log.js";
 import { errorMessage } from "./utils.js";
 import { sendNotification } from "./notify.js";
@@ -41,11 +35,22 @@ cli.command("backup", "Run a backup now").action(async () => {
 
 cli
   .command("restore [url]", "Restore files")
+  .option("--machine <name>", "Restore a specific machine")
   .option("--commit <sha>", "Restore from a specific backup commit")
   .option("-y, --yes", "Accept defaults without prompting")
-  .action(async (url: string | undefined, options: { commit?: string; yes?: boolean }) => {
-    await restore({ repoUrl: url, commit: options.commit, yes: !!options.yes });
-  });
+  .action(
+    async (
+      url: string | undefined,
+      options: { machine?: string; commit?: string; yes?: boolean },
+    ) => {
+      await restore({
+        repoUrl: url,
+        commit: options.commit,
+        yes: !!options.yes,
+        machine: options.machine,
+      });
+    },
+  );
 
 cli
   .command("history [url]", "List and restore a previous backup")
@@ -61,30 +66,6 @@ cli.command("status", "Show the status of the backup").action(async () => {
   await status();
 });
 
-cli.command("ui:check-repo <url>", "").action(async (url: string) => {
-  await checkRepo(url);
-});
-
-cli.command("ui:get-schedule-and-encryption-file-status", "").action(() => {
-  getScheduleAndEncryptionFileStatus();
-});
-
-cli.command("ui:get-last-backup-timestamp", "").action(() => {
-  getLastBackupTimestamp();
-});
-
-cli.command("ui:set-password", "").action(async () => {
-  await setPassword();
-});
-
-cli.command("ui:remove-password-file", "").action(() => {
-  removePasswordFile();
-});
-
-cli.command("ui:paths", "").action(() => {
-  printPaths();
-});
-
 cli.command("", "").action(() => {
   cli.outputHelp();
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -92,8 +73,16 @@ cli.command("", "").action(() => {
   }
 });
 
-// cac auto-adds a --help flag; remove its redundant section from help output
-cli.help((sections) => sections.filter((s) => !s.body?.includes("--help")));
+cli.help((sections) =>
+  sections.filter((section) => {
+    if (!section.body) {
+      return true;
+    }
+    const contentLines = section.body.split("\n").filter((line) => line.trim() !== "");
+    const listsOnlyHelpAndVersion = contentLines.every((line) => /--(help|version)/.test(line));
+    return !listsOnlyHelpAndVersion;
+  }),
+);
 cli.version(getVersion());
 
 async function main(): Promise<void> {

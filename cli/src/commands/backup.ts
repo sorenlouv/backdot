@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import ora from "ora";
 import { loadConfig, CONFIG_PATH } from "../config.js";
+import { POST_RESTORE_HOOK_PATH } from "../paths.js";
 import { resolveFiles } from "../resolveFiles.js";
 import { cleanStaging, copyToStaging, writeRepoReadme, machineDir } from "../staging.js";
 import { gitPull, gitCommitAndPush } from "../git.js";
@@ -77,6 +78,10 @@ export async function backup(): Promise<void> {
     }
 
     const files = [...userFiles, CONFIG_PATH];
+    // Automatically backup the "post-restore" hook if it exists
+    if (fs.existsSync(POST_RESTORE_HOOK_PATH)) {
+      files.push(POST_RESTORE_HOOK_PATH);
+    }
 
     spinner.text = "Syncing with remote";
     await gitPull(config.repository);

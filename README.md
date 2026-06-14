@@ -55,6 +55,10 @@ To encrypt files before they are pushed to the remote repo, add `"encrypt": true
 
 On first backup you'll be prompted for a password and offered to save it to `~/.backdot/encryption.key` so that future backups do not prompt for a password.
 
+## Post-restore hook
+
+Add a `~/.backdot/post-restore` shell script which will be executed after `backdot restore`to install packages, clone repos, etc. It's backed up automatically.
+
 ## Commands
 
 | Command                        | Description                                    |
@@ -64,6 +68,7 @@ On first backup you'll be prompted for a password and offered to save it to `~/.
 | `restore`                      | Restore latest backup from the configured repo |
 | `restore <url>`                | Restore from a specific repo URL               |
 | `restore [url] --commit <sha>` | Restore from a specific backup commit          |
+| `restore [url] --machine <name>` | Restore a specific machine non-interactively |
 | `history [url]`                | Browse and restore a previous backup           |
 | `schedule`                     | Schedule automatic daily backup (Mac-only)     |
 | `unschedule`                   | Unschedule the daily backup                    |
@@ -71,22 +76,11 @@ On first backup you'll be prompted for a password and offered to save it to `~/.
 
 ## Development
 
-### CLI
-
 ```bash
 cd cli
 npm install
 npm run build
 npm start
-```
-
-### macOS UI
-
-Requires Swift 5.9+ and macOS 13+.
-
-```bash
-ui/scripts/build.sh   # build release binary
-ui/scripts/run.sh     # build and launch
 ```
 
 ## License

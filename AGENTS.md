@@ -8,18 +8,8 @@ Fast, simple, beautiful. When in doubt, leave it out.
 
 ## Architecture
 
-- **CLI owns all logic.** The Node.js CLI (`cli/src/`) is the single source of truth for every operation — backup, restore, scheduling, visibility checks, encryption, etc. The Swift macOS UI (`ui/`) is a thin shell that calls CLI commands and displays their output. Never put business logic in Swift; if the UI needs new data, add it to the relevant CLI command's JSON output and parse it in Swift.
-- **Paths are defined once.** Every user-facing filesystem path (`~/.backdot/config.json`, `~/.backdot/encryption.key`, log paths, staging dirs, etc.) is defined as a named constant in `cli/src/paths.ts`. Other modules import from there — never construct paths with `os.homedir()` + `".backdot"` inline. The Swift UI retrieves paths at startup via `backdot paths` (JSON output) so they are never duplicated.
-
-## Swift UI
-
-The macOS UI (`ui/`) must look and feel like a native macOS application. Follow these rules:
-
-- **Use native SwiftUI controls and styles.** No custom-drawn borders, backgrounds, or focus rings. Use `.textFieldStyle(.roundedBorder)`, `.formStyle(.grouped)`, `.pickerStyle(.segmented)`, system toggles, etc.
-- **Auto-save settings.** macOS settings windows do not have Save/Cancel buttons. Text fields save on commit (Enter or focus loss); toggles and list mutations save immediately. The only exception is security-sensitive actions (e.g. setting a password) which use an explicit confirmation button.
-- **Toolbar for navigation.** Place segmented controls and tabs in the window toolbar (`.toolbar` with `placement: .principal`), not in the view body.
-- **System colors only.** Use `.secondary`, `.tertiary`, `Color.accentColor`, and semantic colors. Never hardcode colors like `.green` or `.red` for action icons.
-- **Keep it minimal.** If a piece of UI chrome does not clearly help the user, remove it.
+- **Single CLI package.** The Node.js CLI (`cli/src/`) is the entire product — backup, restore, scheduling, visibility checks, encryption, etc. backdot is a command-line tool with no graphical UI.
+- **Paths are defined once.** Every user-facing filesystem path (`~/.backdot/config.json`, `~/.backdot/encryption.key`, log paths, staging dirs, etc.) is defined as a named constant in `cli/src/paths.ts`. Other modules import from there — never construct paths with `os.homedir()` + `".backdot"` inline.
 
 ## Code style
 

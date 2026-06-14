@@ -38,7 +38,7 @@ Resolves files from config, refuses if the repo is public, syncs with the remote
 Works with or without an existing config:
 
 - **With config:** uses the configured repo and machine.
-- **With a URL argument:** clones the repo and discovers available machines. If multiple machines exist, the user picks one. This makes restore self-bootstrapping on a blank machine.
+- **With a URL argument:** clones the repo and discovers available machines. If multiple machines exist, the user picks one interactively (or names one with `--machine`). This makes restore self-bootstrapping on a blank machine, with no pre-existing config required.
 
 Files are shown in an interactive picker:
 
@@ -47,6 +47,7 @@ Files are shown in an interactive picker:
 
 Options:
 
+- `--machine <name>` selects which machine to restore, without the interactive picker. Required when multiple machines exist and there is no interactive terminal (otherwise restore errors and lists the available machines). If the name is unknown, restore fails and lists the available machines. With a config, `--machine` overrides the configured machine; the repository still comes from config.
 - `--commit <sha>` restores from a specific earlier backup.
 - `--yes` (`-y`) accepts defaults without prompting. With `--yes`, only new files are restored; existing files are skipped.
 
@@ -57,6 +58,8 @@ Lists recent backups, lets the user pick one, then restores from that commit.
 ### `status`
 
 Shows: schedule state, repo URL, machine name, encryption status, repo visibility (public/private/unknown), and a per-file comparison against the remote (backed up / modified since last backup / not yet backed up).
+
+Useful before the first backup: with no config it nudges the user to run `init`; with a config but nothing backed up yet it previews every resolved file as "not yet backed up" instead of erroring.
 
 ### `schedule`
 
@@ -112,6 +115,15 @@ Each machine's files live under `<machine>/` in one of two namespaces, which kee
 - Each backup is a complete snapshot -- files removed from the config are removed from the repo on the next backup.
 - A `README.md` is written at the repo root with restore instructions (including an `npx backdot restore` one-liner).
 
+## Post-restore hook
+
+An optional `~/.backdot/post-restore` script lets a restored machine provision itself (install packages, clone repos, etc.).
+
+- It is an ordinary backed-up file: if it exists, it is automatically included in every backup (like the config file), so it travels with the repo.
+- After `restore` copies files, if the hook was among the files just restored, it is executed once with POSIX `sh` (`/bin/sh ~/.backdot/post-restore`) from the home directory, with output streamed live. It runs only when freshly restored — never a stale on-disk copy the user chose not to restore.
+- A non-zero exit is surfaced as an error (with the exit code) and fails the command; the files themselves were already restored. Not supported on Windows (skipped with a message).
+- The script is code stored in your backup repo and runs with your user privileges — keep the repo private (backup already refuses public repos).
+
 ## Notifications
 
 On macOS, a system notification is shown when a scheduled (background) backup fails, so the user is alerted even when no terminal is visible.
@@ -136,10 +148,6 @@ These behaviors are intentional and must be preserved:
 - **Non-destructive restore.** New files are auto-selected; existing files require explicit opt-in. `--yes` skips existing files entirely.
 - **Key file never backed up.** The encryption password file is always excluded from backups.
 - **Public repo backup refused.** Backup is blocked when the repo is publicly accessible.
-
-## macOS Menu Bar App
-
-A native SwiftUI menu bar app provides quick access to backup status and configuration. It must look indistinguishable from a first-party macOS application -- simple, clean, and using only native system controls. The menu bar dropdown shows status and a "Back Up Now" action. A settings window (opened from the menu) allows editing configuration, managing encryption, toggling the schedule, and viewing logs.
 
 ## Explicitly Removed Features
 

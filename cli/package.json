@@ -37,9 +37,7 @@
     "test:all": "npm run build && vitest run",
     "test:e2e": "npm run build && vitest run src/e2e.test.ts",
     "test:integration": "vitest run src/git.integration.test.ts",
-    "test:watch": "vitest",
-    "build:ui": "../ui/scripts/build.sh",
-    "ui": "../ui/scripts/run.sh"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.3.0",
