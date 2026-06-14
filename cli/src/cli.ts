@@ -73,8 +73,19 @@ cli.command("", "").action(() => {
   }
 });
 
-// cac auto-adds a --help flag; remove its redundant section from help output
-cli.help((sections) => sections.filter((s) => !s.body?.includes("--help")));
+// cac auto-adds global -h/--help and -v/--version flags. Drop the redundant
+// top-level "Options" block that lists only those, but keep per-command Options
+// sections that document real flags (e.g. restore's --machine).
+cli.help((sections) =>
+  sections.filter((section) => {
+    if (!section.body) {
+      return true;
+    }
+    const contentLines = section.body.split("\n").filter((line) => line.trim() !== "");
+    const listsOnlyHelpAndVersion = contentLines.every((line) => /--(help|version)/.test(line));
+    return !listsOnlyHelpAndVersion;
+  }),
+);
 cli.version(getVersion());
 
 async function main(): Promise<void> {
