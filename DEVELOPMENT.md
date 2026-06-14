@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 22+
+- Node.js 18+ (the published package supports Node 18+; CI runs the test suite on Node 22)
 - npm
 - [GitHub CLI](https://cli.github.com/) (`gh`) — needed for releasing
 
@@ -24,8 +24,8 @@ npm run build
 | `npm start`            | Run the built CLI (`dist/cli.js`) |
 | `npm run lint`         | Lint with ESLint                  |
 | `npm run lint:fix`     | Lint and auto-fix                 |
-| `npm run format`       | Format with Prettier              |
-| `npm run format:check` | Check formatting without writing  |
+| `npm run fmt`          | Format with Prettier              |
+| `npm run fmt:check`    | Check formatting without writing  |
 | `npm test`             | Run unit tests                    |
 | `npm run test:e2e`     | Build, then run end-to-end tests  |
 | `npm run test:watch`   | Run tests in watch mode           |

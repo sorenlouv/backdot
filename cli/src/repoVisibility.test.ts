@@ -80,7 +80,7 @@ describe("checkRepoVisibility", () => {
     );
   });
 
-  it('returns "private" when anonymous ls-remote fails', async () => {
+  it('returns "private" when anonymous ls-remote fails with an auth error', async () => {
     mockedExecFile.mockImplementation(
       (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
         cb(new Error("fatal: Authentication failed"), "", "");
@@ -90,6 +90,48 @@ describe("checkRepoVisibility", () => {
 
     const result = await checkRepoVisibility("git@github.com:user/private-repo.git");
     expect(result).toBe("private");
+  });
+
+  it('classifies an access-denied error as "private"', async () => {
+    mockedExecFile.mockImplementation(
+      (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
+        cb(new Error("remote: HTTP Basic: Access denied"), "", "");
+        return { stdin: { end() {} } } as ReturnType<typeof execFile>;
+      },
+    );
+
+    const result = await checkRepoVisibility("git@gitlab.com:org/private-repo.git");
+    expect(result).toBe("private");
+  });
+
+  it('returns "unverifiable" (not "private") when the probe fails for a network reason', async () => {
+    mockedExecFile.mockImplementation(
+      (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
+        cb(
+          new Error(
+            "fatal: unable to access 'https://github.com/user/repo.git/': Could not resolve host: github.com",
+          ),
+          "",
+          "",
+        );
+        return { stdin: { end() {} } } as ReturnType<typeof execFile>;
+      },
+    );
+
+    const result = await checkRepoVisibility("git@github.com:user/repo.git");
+    expect(result).toBe("unverifiable");
+  });
+
+  it('returns "unverifiable" when the probe times out (killed)', async () => {
+    mockedExecFile.mockImplementation(
+      (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
+        cb(Object.assign(new Error("Command failed"), { killed: true }), "", "");
+        return { stdin: { end() {} } } as ReturnType<typeof execFile>;
+      },
+    );
+
+    const result = await checkRepoVisibility("git@github.com:user/repo.git");
+    expect(result).toBe("unverifiable");
   });
 
   it('returns "unknown" for unrecognized hosts', async () => {

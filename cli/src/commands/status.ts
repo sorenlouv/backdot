@@ -6,7 +6,7 @@ import { loadConfig, CONFIG_PATH } from "../config.js";
 import { resolveFiles } from "../resolveFiles.js";
 import { compareFiles } from "../staging.js";
 import { isScheduled } from "../launchd.js";
-import { pluralize } from "../utils.js";
+import { pluralize, errorMessage } from "../utils.js";
 import { checkRepoVisibility, type RepoVisibility } from "../repoVisibility.js";
 import { deriveKey } from "../crypto/encryption.js";
 import { resolvePassword } from "../crypto/password.js";
@@ -22,6 +22,8 @@ function formatVisibility(visibility: RepoVisibility): string {
       return chalk.red.bold("public (backup disabled)");
     case "private":
       return chalk.green("private");
+    case "unverifiable":
+      return chalk.yellow("could not verify (network error)");
     case "unknown":
       return chalk.yellow("unknown (could not verify)");
   }
@@ -85,18 +87,23 @@ export async function status(): Promise<void> {
     const files = [...userFiles, CONFIG_PATH];
 
     spinner.text = "Comparing with remote backup";
-    const { backedUp, modified, notBackedUp, remoteIsEmpty, error } = await compareFiles({
-      files,
-      machine: config.machine,
-      repository: config.repository,
-      resolveKey,
-    });
-    spinner.stop();
-
-    if (error) {
-      console.log(chalk.yellow(`  Could not fetch status: ${error}`));
+    let comparison;
+    try {
+      comparison = await compareFiles({
+        files,
+        machine: config.machine,
+        repository: config.repository,
+        resolveKey,
+      });
+    } catch (err) {
+      spinner.stop();
+      console.log(chalk.yellow(`  Could not fetch status: ${errorMessage(err)}`));
+      console.log();
       return;
     }
+    spinner.stop();
+
+    const { backedUp, modified, notBackedUp, remoteIsEmpty } = comparison;
 
     if (remoteIsEmpty) {
       console.log(`  No backup yet — showing what ${chalk.bold("backdot backup")} would back up.`);

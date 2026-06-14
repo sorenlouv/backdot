@@ -37,9 +37,9 @@ backdot schedule
 
 ## Configuration
 
-| Key     | Description                                            |
-| ------- | ------------------------------------------------------ |
-| `paths` | Glob patterns matching individual files or directories |
+| Key     | Description                                                                                      |
+| ------- | ----------------------------------------------------------------------------------------------- |
+| `paths` | Glob patterns matching files. To back up a whole directory, use a trailing `/**` (e.g. `~/.config/nvim/**`) — a bare directory path matches nothing. |
 
 Prefix a pattern with `!` to exclude matching files:
 
@@ -55,6 +55,8 @@ To encrypt files before they are pushed to the remote repo, add `"encrypt": true
 
 On first backup you'll be prompted for a password and offered to save it to `~/.backdot/encryption.key` so that future backups do not prompt for a password.
 
+For non-interactive backups (the scheduled job, CI, etc.) you can supply the password via the `BACKDOT_PASSWORD` environment variable instead of the key file.
+
 ## Post-restore hook
 
 Add a `~/.backdot/post-restore` shell script which will be executed after `backdot restore`to install packages, clone repos, etc. It's backed up automatically.
@@ -69,6 +71,7 @@ Add a `~/.backdot/post-restore` shell script which will be executed after `backd
 | `restore <url>`                | Restore from a specific repo URL               |
 | `restore [url] --commit <sha>` | Restore from a specific backup commit          |
 | `restore [url] --machine <name>` | Restore a specific machine non-interactively |
+| `restore [url] --yes` (`-y`)   | Restore new files non-interactively (skips existing files) |
 | `history [url]`                | Browse and restore a previous backup           |
 | `schedule`                     | Schedule automatic daily backup (Mac-only)     |
 | `unschedule`                   | Unschedule the daily backup                    |

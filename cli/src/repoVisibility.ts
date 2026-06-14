@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { extractRepoPath } from "./utils.js";
 
-export type RepoVisibility = "public" | "private" | "unknown";
+export type RepoVisibility = "public" | "private" | "unknown" | "unverifiable";
 
 /**
  * Converts an SSH or HTTPS repo URL to a credential-free HTTPS URL
@@ -32,9 +32,35 @@ export async function checkRepoVisibility(repository: string): Promise<RepoVisib
   try {
     await execGitLsRemote(httpsUrl);
     return "public";
-  } catch {
-    return "private";
+  } catch (error) {
+    return indicatesRepoIsPrivate(error) ? "private" : "unverifiable";
   }
+}
+
+/**
+ * Distinguishes a repo that positively rejects anonymous reads (authentication
+ * required, access denied, or hidden as a 404) from a probe that never reached a
+ * verdict (DNS failure, timeout, proxy/TLS error, killed process). Only the
+ * former proves the repo is private. A failed probe must NOT be treated as
+ * private — otherwise a transient network error would silently allow a backup to
+ * a repository that might actually be public.
+ */
+function indicatesRepoIsPrivate(error: unknown): boolean {
+  const { message, stderr } = error as { message?: string; stderr?: string | Buffer };
+  const combinedOutput = `${message ?? ""} ${stderr ?? ""}`.toLowerCase();
+  const anonymousAccessRejectedSignals = [
+    "authentication failed",
+    "could not read username",
+    "could not read password",
+    "invalid username or password",
+    "access denied",
+    "permission denied",
+    "terminal prompts disabled",
+    "not found",
+    "403",
+    "401",
+  ];
+  return anonymousAccessRejectedSignals.some((signal) => combinedOutput.includes(signal));
 }
 
 function execGitLsRemote(url: string): Promise<void> {
@@ -51,9 +77,11 @@ function execGitLsRemote(url: string): Promise<void> {
           SSH_ASKPASS: undefined,
         },
       },
-      (error) => {
+      (error, _stdout, stderr) => {
         if (error) {
-          reject(error);
+          // git writes the real cause (auth vs. network) to stderr; carry it so
+          // the caller can tell "definitely private" from "could not verify".
+          reject(Object.assign(error, { stderr }));
         } else {
           resolve();
         }

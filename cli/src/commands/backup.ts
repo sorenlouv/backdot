@@ -68,6 +68,17 @@ export async function backup(): Promise<void> {
       );
     }
 
+    if (visibility === "unverifiable" && !process.env.BACKDOT_ALLOW_UNVERIFIED_VISIBILITY) {
+      spinner.fail("Backup refused — could not verify repository visibility");
+      throw new Error(
+        `Could not verify whether "${config.repository}" is private — the anonymous ` +
+          "visibility check failed (network error, timeout, or blocked HTTPS access).\n" +
+          "Backup is refused so files are never pushed to a repository that might be public.\n" +
+          "Confirm the repository is private and retry. If HTTPS is blocked in your " +
+          "environment, set BACKDOT_ALLOW_UNVERIFIED_VISIBILITY=1 to override.",
+      );
+    }
+
     spinner.text = "Resolving files";
     const userFiles = resolveFiles(config);
     logger.info(`Resolved ${pluralize(userFiles.length, "file")}`);
