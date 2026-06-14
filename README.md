@@ -57,7 +57,7 @@ On first backup you'll be prompted for a password and offered to save it to `~/.
 
 ## Post-restore hook
 
-Add a `~/.backdot/post-restore` shell script to provision a machine after a restore (install packages, clone repos, etc.). It's backed up automatically and, after `backdot restore` puts it back on a fresh machine, it runs once with `/bin/sh`. Since it's code stored in your repo, keep the repo private.
+Add a `~/.backdot/post-restore` shell script which will be executed after `backdot restore`to install packages, clone repos, etc. It's backed up automatically.
 
 ## Commands
 

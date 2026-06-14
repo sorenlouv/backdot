@@ -229,7 +229,7 @@ export async function restore({
 
   logger.info(`Restored ${pluralize(filesToRestore.length, "file")}`);
 
-  // Run the provisioning hook only if it was among the files just restored, so we
+  // Run the hook only if it was among the files just restored, so we
   // never execute a stale on-disk script the user chose not to restore.
   if (filesToRestore.some(({ dest }) => dest === POST_RESTORE_HOOK_PATH)) {
     runPostRestoreHook();

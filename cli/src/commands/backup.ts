@@ -78,7 +78,7 @@ export async function backup(): Promise<void> {
     }
 
     const files = [...userFiles, CONFIG_PATH];
-    // The post-restore hook travels with the backup so it can run on a restored machine.
+    // Automatically backup the "post-restore" hook if it exists
     if (fs.existsSync(POST_RESTORE_HOOK_PATH)) {
       files.push(POST_RESTORE_HOOK_PATH);
     }
