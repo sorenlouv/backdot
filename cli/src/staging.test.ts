@@ -144,18 +144,15 @@ describe("cleanStaging", () => {
     vi.resetAllMocks();
   });
 
-  it("does nothing when machine dir does not exist", () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    cleanStaging(MACHINE);
-    expect(fs.rmSync).not.toHaveBeenCalled();
-  });
-
-  it("removes the machine directory", () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
+  it("removes only the home/ and root/ namespaces, preserving other files in the machine dir", () => {
     cleanStaging(MACHINE);
 
-    expect(fs.rmSync).toHaveBeenCalledTimes(1);
-    expect(fs.rmSync).toHaveBeenCalledWith(machineDir(MACHINE), {
+    expect(fs.rmSync).toHaveBeenCalledTimes(2);
+    expect(fs.rmSync).toHaveBeenCalledWith(path.join(machineDir(MACHINE), "home"), {
+      recursive: true,
+      force: true,
+    });
+    expect(fs.rmSync).toHaveBeenCalledWith(path.join(machineDir(MACHINE), "root"), {
       recursive: true,
       force: true,
     });

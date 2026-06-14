@@ -4,7 +4,13 @@ import ora from "ora";
 import { checkbox, select, Separator } from "@inquirer/prompts";
 import { loadConfig } from "../config.js";
 import { gitPull } from "../git.js";
-import { STAGING_DIR, machineDir, getRestoreTarget } from "../staging.js";
+import {
+  STAGING_DIR,
+  machineDir,
+  getRestoreTarget,
+  HOME_NAMESPACE,
+  ROOT_NAMESPACE,
+} from "../staging.js";
 import { POST_RESTORE_HOOK_PATH } from "../paths.js";
 import { runPostRestoreHook } from "../postRestoreHook.js";
 import { logger } from "../log.js";
@@ -130,7 +136,12 @@ export async function restore({
     return;
   }
 
-  const backupFiles = listFilesRecursively(machineStagingDir);
+  // Restore only the two managed namespaces; anything else in the machine dir
+  // (e.g. a user-authored README.md) is documentation, not a file to restore.
+  const backupFiles = [HOME_NAMESPACE, ROOT_NAMESPACE]
+    .map((namespace) => path.join(machineStagingDir, namespace))
+    .filter((namespaceDir) => fs.existsSync(namespaceDir))
+    .flatMap(listFilesRecursively);
   logger.info(`Found ${pluralize(backupFiles.length, "file")} in backup repository`);
 
   if (backupFiles.length === 0) {

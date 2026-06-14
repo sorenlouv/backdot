@@ -112,8 +112,8 @@ Each machine's files live under `<machine>/` in one of two namespaces, which kee
 
 - Files under HOME are stored at `<machine>/home/<path-relative-to-HOME>` (e.g. `my-laptop/home/.zshrc`). On restore they are written relative to the _restoring_ machine's HOME, so dotfiles stay portable across machines with different home paths.
 - Files outside HOME are stored at `<machine>/root/<absolute-path-minus-leading-slash>` (e.g. `/etc/foo` becomes `my-laptop/root/etc/foo`). On restore they are written back to their original absolute path.
-- Each backup is a complete snapshot -- files removed from the config are removed from the repo on the next backup.
-- A `README.md` is written at the repo root with restore instructions (including an `npx backdot restore` one-liner).
+- Each backup is a complete snapshot of the configured files: the `home/` and `root/` namespaces are fully rebuilt every backup, so files removed from the config are removed from the repo. Any other file you add under `<machine>/` -- e.g. a hand-written `README.md` with machine-specific restore notes -- is left untouched and survives across backups; `restore` ignores it (only `home/` and `root/` are restored).
+- A `README.md` is written at the repo root with restore instructions (an `npx backdot restore <repo> --machine <machine>` one-liner) and a pointer to each machine's own `README.md`.
 
 ## Post-restore hook
 

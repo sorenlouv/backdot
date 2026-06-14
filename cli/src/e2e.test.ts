@@ -674,3 +674,54 @@ describe("post-restore hook", () => {
     }
   });
 });
+
+describe("user-authored files in the machine dir", () => {
+  it("preserves <machine>/README.md across backups and never restores it", () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-userdoc-"));
+    try {
+      const remoteRepo = path.join(homeDir, "remote.git");
+      execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+      fs.writeFileSync(path.join(homeDir, ".zshrc"), "# zshrc\n");
+      fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
+      fs.writeFileSync(
+        path.join(homeDir, ".backdot", "config.json"),
+        JSON.stringify({ repository: remoteRepo, machine: "box", paths: ["~/.zshrc"] }, null, 2),
+      );
+
+      run(["backup"], testEnv(homeDir));
+
+      // The user adds box/README.md directly to the repo (web UI or a clone).
+      const editClone = path.join(homeDir, "edit-clone");
+      cloneRemote(remoteRepo, editClone);
+      const NOTES = "# Restore notes for box\n\nRun ./provision.sh after restoring.\n";
+      fs.writeFileSync(path.join(editClone, "box", "README.md"), NOTES);
+      execSync(`git -C "${editClone}" add -A`, { stdio: "ignore" });
+      execSync(
+        `git -C "${editClone}" -c user.name=u -c user.email=u@e.dev commit -m "add restore notes"`,
+        { stdio: "ignore" },
+      );
+      execSync(`git -C "${editClone}" push`, { stdio: "ignore" });
+
+      // A subsequent backup must not delete the user's README.
+      fs.writeFileSync(path.join(homeDir, ".zshrc"), "# changed\n");
+      run(["backup"], testEnv(homeDir));
+
+      const verify = path.join(homeDir, "verify");
+      cloneRemote(remoteRepo, verify);
+      expect(fs.readFileSync(path.join(verify, "box", "README.md"), "utf-8")).toBe(NOTES);
+      // The payload was still updated.
+      expect(fs.readFileSync(path.join(verify, "box", "home", ".zshrc"), "utf-8")).toBe(
+        "# changed\n",
+      );
+
+      // Restore treats the README as docs: the payload comes back, the README never does.
+      fs.rmSync(path.join(homeDir, ".zshrc"));
+      run(["restore", remoteRepo, "--machine", "box", "--yes"], testEnv(homeDir));
+      expect(fs.existsSync(path.join(homeDir, ".zshrc"))).toBe(true);
+      expect(fs.existsSync(path.join(homeDir, "README.md"))).toBe(false);
+    } finally {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+});
