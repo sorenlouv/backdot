@@ -5,6 +5,20 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Version bump for a manual release. Merges to main always publish a patch; use this to cut a minor or major."
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+# Least privilege by default. The publish job opts into more below.
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -39,3 +53,78 @@ jobs:
         working-directory: cli
       - run: npm run test:e2e
         working-directory: cli
+
+  # Publishes a new version to npm on every merge to main (patch bump), or a
+  # minor/major when triggered manually via "Run workflow". Authenticates to npm
+  # with OIDC trusted publishing — no NPM_TOKEN is stored anywhere.
+  publish:
+    needs: check
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+
+    # Never let two releases run at once (avoids version/publish races).
+    concurrency:
+      group: publish-npm
+      cancel-in-progress: false
+
+    permissions:
+      contents: write # push the version-bump commit + tag and create the release
+      id-token: write # mint the OIDC token for npm trusted publishing
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }} # stay on the branch (not a detached HEAD) so we can commit + push
+          fetch-depth: 0 # full history + tags so release notes are generated correctly
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org" # pins the registry for the OIDC token exchange
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      # Node 22 bundles npm 10.x, but OIDC trusted publishing needs npm >= 11.5.1.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: cli
+
+      - name: Build
+        run: npm run build
+        working-directory: cli
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # "[skip ci]" plus the GITHUB_TOKEN recursion guard keep this bump commit
+      # from re-triggering the workflow. "%s" is replaced by the new version.
+      - name: Bump version
+        id: version
+        working-directory: cli
+        run: |
+          new_version=$(npm version "${{ inputs.release_type || 'patch' }}" -m "chore(release): %s [skip ci]")
+          echo "tag=$new_version" >> "$GITHUB_OUTPUT"
+
+      # Push the bump commit + tag BEFORE publishing. If this push fails, nothing
+      # has been published yet, so re-running the job recovers cleanly. (Publishing
+      # first and failing the push would leave npm ahead of main and wedge releases.)
+      - name: Push version bump and tag
+        run: git push --follow-tags origin "HEAD:${{ github.ref_name }}"
+
+      # No --provenance flag and no token needed: under trusted publishing,
+      # npm authenticates via OIDC and attaches provenance automatically.
+      - name: Publish to npm
+        run: npm publish
+        working-directory: cli
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ steps.version.outputs.tag }}" --generate-notes
