@@ -99,12 +99,12 @@ async function resolveRepoAndMachine(
 export async function restore({
   repoUrl,
   commit,
-  yes,
+  skipExisting,
   machine: machineOverride,
 }: {
   repoUrl?: string;
   commit?: string;
-  yes?: boolean;
+  skipExisting?: boolean;
   machine?: string;
 } = {}): Promise<void> {
   logger.info("Starting restore");
@@ -170,11 +170,11 @@ export async function restore({
 
   let filesToRestore: FileMapping[];
 
-  if (yes) {
+  if (skipExisting) {
     filesToRestore = newFiles;
     if (filesAlreadyOnDisk.length > 0) {
       console.log(
-        `  Skipped ${pluralize(filesAlreadyOnDisk.length, "existing file")}. Run without --yes to select them.`,
+        `  Skipped ${pluralize(filesAlreadyOnDisk.length, "existing file")}. Run without --no-overwrite to select them.`,
       );
       console.log();
     }

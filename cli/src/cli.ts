@@ -37,16 +37,20 @@ cli
   .command("restore [url]", "Restore files")
   .option("--machine <name>", "Restore a specific machine")
   .option("--commit <sha>", "Restore from a specific backup commit")
-  .option("-y, --yes", "Accept defaults without prompting")
+  .option(
+    "--no-overwrite",
+    "Restore only new files; never overwrite existing ones (non-interactive)",
+  )
   .action(
     async (
       url: string | undefined,
-      options: { machine?: string; commit?: string; yes?: boolean },
+      options: { machine?: string; commit?: string; overwrite?: boolean },
     ) => {
       await restore({
         repoUrl: url,
         commit: options.commit,
-        yes: !!options.yes,
+        // cac defaults `overwrite` to true and `--no-overwrite` flips it to false.
+        skipExisting: options.overwrite === false,
         machine: options.machine,
       });
     },
