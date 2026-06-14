@@ -5,6 +5,8 @@ import { checkbox, select, Separator } from "@inquirer/prompts";
 import { loadConfig } from "../config.js";
 import { gitPull } from "../git.js";
 import { STAGING_DIR, machineDir, getRestoreTarget } from "../staging.js";
+import { POST_RESTORE_HOOK_PATH } from "../paths.js";
+import { runPostRestoreHook } from "../postRestoreHook.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
 import { decrypt, deriveKey } from "../crypto/encryption.js";
@@ -226,4 +228,10 @@ export async function restore({
   }
 
   logger.info(`Restored ${pluralize(filesToRestore.length, "file")}`);
+
+  // Run the hook only if it was among the files just restored, so we
+  // never execute a stale on-disk script the user chose not to restore.
+  if (filesToRestore.some(({ dest }) => dest === POST_RESTORE_HOOK_PATH)) {
+    runPostRestoreHook();
+  }
 }

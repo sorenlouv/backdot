@@ -55,6 +55,10 @@ To encrypt files before they are pushed to the remote repo, add `"encrypt": true
 
 On first backup you'll be prompted for a password and offered to save it to `~/.backdot/encryption.key` so that future backups do not prompt for a password.
 
+## Post-restore hook
+
+Add a `~/.backdot/post-restore` shell script which will be executed after `backdot restore`to install packages, clone repos, etc. It's backed up automatically.
+
 ## Commands
 
 | Command                        | Description                                    |
