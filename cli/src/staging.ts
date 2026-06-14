@@ -56,13 +56,14 @@ export function getRestoreTarget(machineRelativePath: string): RestoreTarget {
 }
 
 export function cleanStaging(machine: string): void {
-  const machineStagingDir = machineDir(machine);
-  if (!fs.existsSync(machineStagingDir)) {
-    return;
+  // Remove only the backdot-managed namespaces so user-authored files in the
+  // machine dir (e.g. a hand-written README.md with restore notes) survive
+  // across backups. home/ and root/ are still fully rebuilt, so a backup
+  // remains a complete snapshot of the configured files.
+  for (const namespace of [HOME_NAMESPACE, ROOT_NAMESPACE]) {
+    fs.rmSync(path.join(machineDir(machine), namespace), { recursive: true, force: true });
   }
-
-  fs.rmSync(machineStagingDir, { recursive: true, force: true });
-  logger.info(`Cleaned staging directory for machine "${machine}"`);
+  logger.info(`Cleaned staging namespaces for machine "${machine}"`);
 }
 
 export function copyToStaging(files: string[], machine: string, derivedKey?: DerivedKey): void {
@@ -245,8 +246,10 @@ ${encryptionNote}
 ## Restore
 
 \`\`\`bash
-npx backdot restore ${repository}
+npx backdot restore ${repository} --machine <machine>
 \`\`\`
+
+Each machine is a top-level directory here; replace \`<machine>\` with the one you want to restore. A machine may also contain its own \`README.md\` with extra, machine-specific restore steps — backdot preserves it across backups.
 
 For full documentation, configuration options, and scheduling, see the [official README](https://github.com/sorenlouv/backdot).
 `;
