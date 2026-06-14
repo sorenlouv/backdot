@@ -137,10 +137,6 @@ These behaviors are intentional and must be preserved:
 - **Key file never backed up.** The encryption password file is always excluded from backups.
 - **Public repo backup refused.** Backup is blocked when the repo is publicly accessible.
 
-## macOS Menu Bar App
-
-A native SwiftUI menu bar app provides quick access to backup status and configuration. It must look indistinguishable from a first-party macOS application -- simple, clean, and using only native system controls. The menu bar dropdown shows status and a "Back Up Now" action. A settings window (opened from the menu) allows editing configuration, managing encryption, toggling the schedule, and viewing logs.
-
 ## Explicitly Removed Features
 
 These features existed in earlier versions and were intentionally removed. Do not reintroduce them.

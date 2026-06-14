@@ -71,22 +71,11 @@ On first backup you'll be prompted for a password and offered to save it to `~/.
 
 ## Development
 
-### CLI
-
 ```bash
 cd cli
 npm install
 npm run build
 npm start
-```
-
-### macOS UI
-
-Requires Swift 5.9+ and macOS 13+.
-
-```bash
-ui/scripts/build.sh   # build release binary
-ui/scripts/run.sh     # build and launch
 ```
 
 ## License
