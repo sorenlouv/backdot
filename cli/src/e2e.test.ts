@@ -142,7 +142,9 @@ describe("backdot e2e", () => {
 
     expect(fs.existsSync(path.join(verifyDir, "test-machine", "home", ".zshrc"))).toBe(true);
     expect(
-      fs.existsSync(path.join(verifyDir, "test-machine", "home", ".config", "test", "settings.json")),
+      fs.existsSync(
+        path.join(verifyDir, "test-machine", "home", ".config", "test", "settings.json"),
+      ),
     ).toBe(true);
     expect(
       fs.existsSync(path.join(verifyDir, "test-machine", "home", ".backdot", "config.json")),

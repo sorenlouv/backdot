@@ -199,7 +199,10 @@ describe("getRestoreTarget", () => {
 
   it("is the inverse of getStagedPath for HOME and non-HOME files", () => {
     for (const original of [`${HOME}/.config/nvim/init.lua`, "/etc/ssh/sshd_config"]) {
-      const machineRelativePath = path.relative(machineDir(MACHINE), getStagedPath(original, MACHINE));
+      const machineRelativePath = path.relative(
+        machineDir(MACHINE),
+        getStagedPath(original, MACHINE),
+      );
       expect(getRestoreTarget(machineRelativePath).destination).toBe(original);
     }
   });
