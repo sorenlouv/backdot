@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import os from "node:os";
 import chalk from "chalk";
 import ora from "ora";
@@ -27,6 +28,12 @@ function formatVisibility(visibility: RepoVisibility): string {
 }
 
 export async function status(): Promise<void> {
+  if (!fs.existsSync(CONFIG_PATH)) {
+    console.log();
+    console.log(`  No config found. Run ${chalk.bold("backdot init")} to get started.\n`);
+    return;
+  }
+
   const scheduled = isScheduled();
   console.log();
   console.log(
@@ -59,7 +66,9 @@ export async function status(): Promise<void> {
     return;
   }
 
-  const derivedKey = config.encrypt ? deriveKey((await resolvePassword()).password) : undefined;
+  const resolveKey = config.encrypt
+    ? async () => deriveKey((await resolvePassword()).password)
+    : undefined;
 
   console.log();
 
@@ -76,17 +85,22 @@ export async function status(): Promise<void> {
     const files = [...userFiles, CONFIG_PATH];
 
     spinner.text = "Comparing with remote backup";
-    const { backedUp, modified, notBackedUp, error } = await compareFiles({
+    const { backedUp, modified, notBackedUp, remoteIsEmpty, error } = await compareFiles({
       files,
       machine: config.machine,
       repository: config.repository,
-      derivedKey,
+      resolveKey,
     });
     spinner.stop();
 
     if (error) {
       console.log(chalk.yellow(`  Could not fetch status: ${error}`));
       return;
+    }
+
+    if (remoteIsEmpty) {
+      console.log(`  No backup yet — showing what ${chalk.bold("backdot backup")} would back up.`);
+      console.log();
     }
 
     if (modified.length === 0 && notBackedUp.length === 0) {

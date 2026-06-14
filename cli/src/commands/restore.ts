@@ -5,6 +5,8 @@ import { checkbox, select, Separator } from "@inquirer/prompts";
 import { loadConfig } from "../config.js";
 import { gitPull } from "../git.js";
 import { STAGING_DIR, machineDir, getRestoreTarget } from "../staging.js";
+import { POST_RESTORE_HOOK_PATH } from "../paths.js";
+import { runPostRestoreHook } from "../postRestoreHook.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
 import { decrypt, deriveKey } from "../crypto/encryption.js";
@@ -30,13 +32,20 @@ function listMachines(): string[] {
     .map((entry) => entry.name);
 }
 
+function formatMachineList(machines: string[]): string {
+  return machines.map((machine) => `    - ${machine}`).join("\n");
+}
+
 async function resolveRepoAndMachine(
   repoUrl?: string,
   commit?: string,
+  machineOverride?: string,
 ): Promise<{ repository: string; machine: string }> {
   if (!repoUrl) {
     const config = loadConfig();
-    return { repository: config.repository, machine: config.machine };
+    // An explicit --machine wins over the configured machine; the repository
+    // still comes from config.
+    return { repository: config.repository, machine: machineOverride ?? config.machine };
   }
 
   const spinner = ora("Cloning backup repository").start();
@@ -53,16 +62,30 @@ async function resolveRepoAndMachine(
     throw new Error("The backup repository is empty (no machine directories found).");
   }
 
-  let machine: string;
-  if (machines.length === 1) {
-    machine = machines[0];
-  } else {
-    machine = await select({
-      message: "Multiple machines found. Which one do you want to restore?",
-      loop: false,
-      choices: machines.map((machine) => ({ name: machine, value: machine })),
-    });
+  if (machineOverride) {
+    if (!machines.includes(machineOverride)) {
+      throw new Error(
+        `No backup found for machine "${machineOverride}".\n  Available machines:\n${formatMachineList(machines)}`,
+      );
+    }
+    return { repository: repoUrl, machine: machineOverride };
   }
+
+  if (machines.length === 1) {
+    return { repository: repoUrl, machine: machines[0] };
+  }
+
+  if (!process.stdin.isTTY) {
+    throw new Error(
+      `Multiple machines found in the backup repository. Re-run with --machine <name>:\n${formatMachineList(machines)}`,
+    );
+  }
+
+  const machine = await select({
+    message: "Multiple machines found. Which one do you want to restore?",
+    loop: false,
+    choices: machines.map((machine) => ({ name: machine, value: machine })),
+  });
 
   return { repository: repoUrl, machine };
 }
@@ -71,14 +94,16 @@ export async function restore({
   repoUrl,
   commit,
   yes,
+  machine: machineOverride,
 }: {
   repoUrl?: string;
   commit?: string;
   yes?: boolean;
+  machine?: string;
 } = {}): Promise<void> {
   logger.info("Starting restore");
 
-  const { repository, machine } = await resolveRepoAndMachine(repoUrl, commit);
+  const { repository, machine } = await resolveRepoAndMachine(repoUrl, commit, machineOverride);
 
   const spinner = ora("Fetching latest backup").start();
   const machineStagingDir = machineDir(machine);
@@ -203,4 +228,10 @@ export async function restore({
   }
 
   logger.info(`Restored ${pluralize(filesToRestore.length, "file")}`);
+
+  // Run the hook only if it was among the files just restored, so we
+  // never execute a stale on-disk script the user chose not to restore.
+  if (filesToRestore.some(({ dest }) => dest === POST_RESTORE_HOOK_PATH)) {
+    runPostRestoreHook();
+  }
 }

@@ -213,14 +213,16 @@ describe("compareFiles", () => {
     vi.resetAllMocks();
   });
 
-  it("returns error when no git repo exists", async () => {
+  it("treats a missing local repo as an empty remote (pre-backup preview)", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
 
     const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
-    expect(result.error).toContain("Backup repository not found");
-    expect(result.notBackedUp).toEqual([]);
+    expect(result.error).toBeUndefined();
+    expect(result.remoteIsEmpty).toBe(true);
+    expect(result.notBackedUp).toEqual(files);
+    expect(result.backedUp).toEqual([]);
   });
 
   it("returns empty result for empty file list", async () => {
@@ -255,7 +257,7 @@ describe("compareFiles", () => {
     expect(result.notBackedUp).toEqual([]);
   });
 
-  it("marks files as notBackedUp when not in ls-tree output", async () => {
+  it("treats an empty ls-tree (no snapshot for this machine) as an empty remote", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.fetch.mockResolvedValue(undefined);
     mockGit.revparse.mockResolvedValue("main");
@@ -271,6 +273,7 @@ describe("compareFiles", () => {
     const files = [`${HOME}/.zshrc`];
     const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
+    expect(result.remoteIsEmpty).toBe(true);
     expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
     expect(result.backedUp).toEqual([]);
     expect(result.modified).toEqual([]);

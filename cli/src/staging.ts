@@ -100,6 +100,7 @@ export interface ComparisonResult {
   backedUp: string[];
   modified: string[];
   notBackedUp: string[];
+  remoteIsEmpty?: boolean;
   error?: string;
 }
 
@@ -107,21 +108,25 @@ function failedComparisonResult(err: unknown): ComparisonResult {
   return { backedUp: [], modified: [], notBackedUp: [], error: errorMessage(err) };
 }
 
+// This machine has no snapshot in the remote yet, so every file counts as "not
+// backed up". Lets `status` preview what a first backup would push instead of erroring.
+function emptyRemoteResult(files: string[]): ComparisonResult {
+  return { backedUp: [], modified: [], notBackedUp: files, remoteIsEmpty: true };
+}
+
 export async function compareFiles(opts: {
   files: string[];
   machine: string;
   repository: string;
-  derivedKey?: DerivedKey;
+  resolveKey?: () => Promise<DerivedKey>;
 }): Promise<ComparisonResult> {
-  const { files, machine, repository, derivedKey } = opts;
+  const { files, machine, repository, resolveKey } = opts;
   if (files.length === 0) {
     return { backedUp: [], modified: [], notBackedUp: [] };
   }
 
   if (!fs.existsSync(STAGING_GIT_DIR)) {
-    return failedComparisonResult(
-      new Error('Backup repository not found. Run "backdot backup" first.'),
-    );
+    return emptyRemoteResult(files);
   }
 
   const git = simpleGit(STAGING_DIR);
@@ -157,7 +162,14 @@ export async function compareFiles(opts: {
     return failedComparisonResult(err);
   }
 
-  if (derivedKey) {
+  // Repo reachable but this machine has nothing backed up yet (empty repo, or it
+  // only holds other machines). Treat as a pre-backup preview.
+  if (remoteBlobHashes.size === 0) {
+    return emptyRemoteResult(files);
+  }
+
+  if (resolveKey) {
+    const derivedKey = await resolveKey();
     return compareFilesToRemote(
       files,
       machine,
