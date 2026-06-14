@@ -49,7 +49,7 @@ Options:
 
 - `--machine <name>` selects which machine to restore, without the interactive picker. Required when multiple machines exist and there is no interactive terminal (otherwise restore errors and lists the available machines). If the name is unknown, restore fails and lists the available machines. With a config, `--machine` overrides the configured machine; the repository still comes from config.
 - `--commit <sha>` restores from a specific earlier backup.
-- `--yes` (`-y`) accepts defaults without prompting. With `--yes`, only new files are restored; existing files are skipped.
+- `--no-overwrite` restores without prompting: only new files are restored, and existing files are never overwritten.
 
 ### `history [url]`
 
@@ -145,7 +145,7 @@ These behaviors are intentional and must be preserved:
 - **No merge conflicts, ever.** See Git Strategy above.
 - **Machine isolation.** Two machines sharing a repo must never clobber each other's files.
 - **Config always included in backup.** This enables self-bootstrapping restore on a blank machine.
-- **Non-destructive restore.** New files are auto-selected; existing files require explicit opt-in. `--yes` skips existing files entirely.
+- **Non-destructive restore.** New files are auto-selected; existing files require explicit opt-in. `--no-overwrite` restores only new files and never overwrites existing ones.
 - **Key file never backed up.** The encryption password file is always excluded from backups.
 - **Public repo backup refused.** Backup is blocked when the repo is publicly accessible.
 

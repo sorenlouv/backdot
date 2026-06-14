@@ -193,7 +193,7 @@ describe("backdot e2e", () => {
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
     fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
-    const output = run(["restore", remoteRepo, "--yes"], env);
+    const output = run(["restore", remoteRepo, "--no-overwrite"], env);
     expect(output).toContain("Restored");
 
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(MODIFIED_ZSHRC);
@@ -215,7 +215,7 @@ describe("backdot e2e", () => {
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
     fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
-    const output = run(["restore", remoteRepo, "--commit", firstCommitSha, "--yes"], env);
+    const output = run(["restore", remoteRepo, "--commit", firstCommitSha, "--no-overwrite"], env);
     expect(output).toContain("Restored");
 
     // The first commit had the original ZSHRC_CONTENT, not the MODIFIED_ZSHRC
@@ -418,7 +418,7 @@ describe("encrypted backup and restore", () => {
     fs.unlinkSync(path.join(tempDir, ".zshrc"));
     fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
-    const output = run(["restore", remoteRepo, "--yes"], env);
+    const output = run(["restore", remoteRepo, "--no-overwrite"], env);
     expect(output).toContain("Restored");
 
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(ZSHRC_CONTENT);
@@ -487,7 +487,7 @@ describe("files outside HOME round-trip", () => {
     // Delete the original, then restore: it must come back at the same absolute
     // path, not somewhere under HOME.
     fs.rmSync(outsideDir, { recursive: true, force: true });
-    expect(run(["restore", remoteRepo, "--yes"], env)).toContain("Restored");
+    expect(run(["restore", remoteRepo, "--no-overwrite"], env)).toContain("Restored");
 
     expect(fs.readFileSync(path.join(outsideDir, "system.conf"), "utf-8")).toBe(OUTSIDE_CONTENT);
   });
@@ -576,7 +576,7 @@ describe("restore --machine", () => {
     const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
     try {
       const output = run(
-        ["restore", remoteRepo, "--machine", "server", "--yes"],
+        ["restore", remoteRepo, "--machine", "server", "--no-overwrite"],
         testEnv(freshHome),
       );
       expect(output).toContain("Restored");
@@ -591,7 +591,7 @@ describe("restore --machine", () => {
     const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
     try {
       const message = failureOutput(
-        ["restore", remoteRepo, "--machine", "nope", "--yes"],
+        ["restore", remoteRepo, "--machine", "nope", "--no-overwrite"],
         testEnv(freshHome),
       );
       expect(message).toContain('No backup found for machine "nope"');
@@ -605,7 +605,7 @@ describe("restore --machine", () => {
   it("errors and lists machines when multiple exist, no --machine, and no TTY", () => {
     const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
     try {
-      const message = failureOutput(["restore", remoteRepo, "--yes"], testEnv(freshHome));
+      const message = failureOutput(["restore", remoteRepo, "--no-overwrite"], testEnv(freshHome));
       expect(message).toContain("Multiple machines found");
       expect(message).toContain("--machine");
       expect(message).toContain("laptop");
@@ -644,7 +644,10 @@ describe("post-restore hook", () => {
   it("runs the restored hook after restoring", () => {
     const { homeDir, remoteRepo } = setupBackedUpMachine('touch "$HOME/provisioned"\n');
     try {
-      const output = run(["restore", remoteRepo, "--machine", "box", "--yes"], testEnv(homeDir));
+      const output = run(
+        ["restore", remoteRepo, "--machine", "box", "--no-overwrite"],
+        testEnv(homeDir),
+      );
 
       expect(output).toContain("Restored");
       expect(output).toContain("post-restore hook");
@@ -660,7 +663,7 @@ describe("post-restore hook", () => {
     try {
       let message = "";
       try {
-        run(["restore", remoteRepo, "--machine", "box", "--yes"], testEnv(homeDir));
+        run(["restore", remoteRepo, "--machine", "box", "--no-overwrite"], testEnv(homeDir));
       } catch (err) {
         message = (err as Error).message;
       }
@@ -717,7 +720,7 @@ describe("user-authored files in the machine dir", () => {
 
       // Restore treats the README as docs: the payload comes back, the README never does.
       fs.rmSync(path.join(homeDir, ".zshrc"));
-      run(["restore", remoteRepo, "--machine", "box", "--yes"], testEnv(homeDir));
+      run(["restore", remoteRepo, "--machine", "box", "--no-overwrite"], testEnv(homeDir));
       expect(fs.existsSync(path.join(homeDir, ".zshrc"))).toBe(true);
       expect(fs.existsSync(path.join(homeDir, "README.md"))).toBe(false);
     } finally {
