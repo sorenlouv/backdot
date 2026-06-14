@@ -1,17 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import ora from "ora";
 import { checkbox, select, Separator } from "@inquirer/prompts";
 import { loadConfig } from "../config.js";
 import { gitPull } from "../git.js";
-import { STAGING_DIR, machineDir } from "../staging.js";
+import { STAGING_DIR, machineDir, getRestoreTarget } from "../staging.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
 import { decrypt, deriveKey } from "../crypto/encryption.js";
 import { resolvePassword, offerToSaveKeyFile, ENC_SUFFIX } from "../crypto/password.js";
-
-const HOME = os.homedir();
 
 function listFilesRecursively(dir: string): string[] {
   return fs
@@ -118,11 +115,12 @@ export async function restore({
   }
 
   const fileMappings = backupFiles.map((backupFilePath) => {
-    let relativePath = path.relative(machineStagingDir, backupFilePath);
-    if (relativePath.endsWith(ENC_SUFFIX)) {
-      relativePath = relativePath.slice(0, -ENC_SUFFIX.length);
+    let machineRelativePath = path.relative(machineStagingDir, backupFilePath);
+    if (machineRelativePath.endsWith(ENC_SUFFIX)) {
+      machineRelativePath = machineRelativePath.slice(0, -ENC_SUFFIX.length);
     }
-    return { src: backupFilePath, dest: path.join(HOME, relativePath), relativePath };
+    const { destination, displayPath } = getRestoreTarget(machineRelativePath);
+    return { src: backupFilePath, dest: destination, displayPath };
   });
 
   const filesAlreadyOnDisk = fileMappings.filter((file) => fs.existsSync(file.dest));
@@ -150,7 +148,7 @@ export async function restore({
     if (newFiles.length > 0) {
       choices.push(new Separator(`── New files (${newFiles.length}) ──`));
       for (const file of newFiles) {
-        choices.push({ name: file.relativePath, value: file, checked: true });
+        choices.push({ name: file.displayPath, value: file, checked: true });
       }
     }
 
@@ -159,7 +157,7 @@ export async function restore({
         new Separator(`── Existing files — will overwrite (${filesAlreadyOnDisk.length}) ──`),
       );
       for (const file of filesAlreadyOnDisk) {
-        choices.push({ name: file.relativePath, value: file, checked: false });
+        choices.push({ name: file.displayPath, value: file, checked: false });
       }
     }
 

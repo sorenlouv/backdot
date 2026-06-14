@@ -61,6 +61,7 @@ import {
   copyToStaging,
   writeRepoReadme,
   getStagedPath,
+  getRestoreTarget,
   compareFiles,
   STAGING_DIR,
   machineDir,
@@ -82,25 +83,25 @@ describe("copyToStaging", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
   });
 
-  it("copies files into the machine subfolder preserving directory structure relative to home", () => {
+  it("copies HOME files into the machine's home/ namespace preserving directory structure", () => {
     const files = [`${HOME}/.zshrc`, `${HOME}/.config/ghostty/config`];
     copyToStaging(files, MACHINE);
 
     const dir = machineDir(MACHINE);
-    expect(fs.copyFileSync).toHaveBeenCalledWith(`${HOME}/.zshrc`, path.join(dir, ".zshrc"));
+    expect(fs.copyFileSync).toHaveBeenCalledWith(`${HOME}/.zshrc`, path.join(dir, "home/.zshrc"));
     expect(fs.copyFileSync).toHaveBeenCalledWith(
       `${HOME}/.config/ghostty/config`,
-      path.join(dir, ".config/ghostty/config"),
+      path.join(dir, "home/.config/ghostty/config"),
     );
   });
 
-  it("handles files outside home dir by stripping leading slash", () => {
+  it("copies files outside HOME into the machine's root/ namespace", () => {
     const files = ["/etc/hosts"];
     copyToStaging(files, MACHINE);
 
     expect(fs.copyFileSync).toHaveBeenCalledWith(
       "/etc/hosts",
-      path.join(machineDir(MACHINE), "etc/hosts"),
+      path.join(machineDir(MACHINE), "root/etc/hosts"),
     );
   });
 
@@ -162,18 +163,45 @@ describe("cleanStaging", () => {
 });
 
 describe("getStagedPath", () => {
-  it("maps a home-relative file to the machine subdirectory", () => {
-    expect(getStagedPath(`${HOME}/.zshrc`, MACHINE)).toBe(path.join(machineDir(MACHINE), ".zshrc"));
+  it("maps a HOME file into the home/ namespace", () => {
+    expect(getStagedPath(`${HOME}/.zshrc`, MACHINE)).toBe(
+      path.join(machineDir(MACHINE), "home/.zshrc"),
+    );
   });
 
   it("preserves nested directory structure", () => {
     expect(getStagedPath(`${HOME}/.config/ghostty/config`, MACHINE)).toBe(
-      path.join(machineDir(MACHINE), ".config/ghostty/config"),
+      path.join(machineDir(MACHINE), "home/.config/ghostty/config"),
     );
   });
 
-  it("handles files outside home dir by stripping leading slash", () => {
-    expect(getStagedPath("/etc/hosts", MACHINE)).toBe(path.join(machineDir(MACHINE), "etc/hosts"));
+  it("maps a file outside HOME into the root/ namespace", () => {
+    expect(getStagedPath("/etc/hosts", MACHINE)).toBe(
+      path.join(machineDir(MACHINE), "root/etc/hosts"),
+    );
+  });
+});
+
+describe("getRestoreTarget", () => {
+  it("maps a home/ path back to the restoring machine's HOME", () => {
+    expect(getRestoreTarget(path.join("home", ".zshrc"))).toEqual({
+      destination: path.join(HOME, ".zshrc"),
+      displayPath: "~/.zshrc",
+    });
+  });
+
+  it("maps a root/ path back to its absolute path", () => {
+    expect(getRestoreTarget(path.join("root", "etc/hosts"))).toEqual({
+      destination: "/etc/hosts",
+      displayPath: "/etc/hosts",
+    });
+  });
+
+  it("is the inverse of getStagedPath for HOME and non-HOME files", () => {
+    for (const original of [`${HOME}/.config/nvim/init.lua`, "/etc/ssh/sshd_config"]) {
+      const machineRelativePath = path.relative(machineDir(MACHINE), getStagedPath(original, MACHINE));
+      expect(getRestoreTarget(machineRelativePath).destination).toBe(original);
+    }
   });
 });
 
@@ -205,8 +233,8 @@ describe("compareFiles", () => {
     mockGit.fetch.mockResolvedValue(undefined);
     mockGit.revparse.mockResolvedValue("main");
 
-    const zshrcPath = `${MACHINE}/.zshrc`;
-    const npmrcPath = `${MACHINE}/.npmrc`;
+    const zshrcPath = `${MACHINE}/home/.zshrc`;
+    const npmrcPath = `${MACHINE}/home/.npmrc`;
 
     vi.mocked(execFileSync).mockImplementation((_cmd, args) => {
       const a = args as string[];
