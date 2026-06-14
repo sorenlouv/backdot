@@ -35,7 +35,7 @@ cli.command("backup", "Run a backup now").action(async () => {
 
 cli
   .command("restore [url]", "Restore files")
-  .option("--machine <name>", "Restore a specific machine (skips the picker)")
+  .option("--machine <name>", "Restore a specific machine")
   .option("--commit <sha>", "Restore from a specific backup commit")
   .option("-y, --yes", "Accept defaults without prompting")
   .action(
@@ -73,9 +73,6 @@ cli.command("", "").action(() => {
   }
 });
 
-// cac auto-adds global -h/--help and -v/--version flags. Drop the redundant
-// top-level "Options" block that lists only those, but keep per-command Options
-// sections that document real flags (e.g. restore's --machine).
 cli.help((sections) =>
   sections.filter((section) => {
     if (!section.body) {
