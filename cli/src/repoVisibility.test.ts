@@ -80,10 +80,18 @@ describe("checkRepoVisibility", () => {
     );
   });
 
-  it('returns "private" when anonymous ls-remote fails with an auth error', async () => {
+  // Real message captured from `git ls-remote` against a private/missing repo on
+  // github.com, gitlab.com and bitbucket.org (HTTP 401, prompts disabled).
+  it('returns "private" when the server requires auth ("terminal prompts disabled")', async () => {
     mockedExecFile.mockImplementation(
       (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
-        cb(new Error("fatal: Authentication failed"), "", "");
+        cb(
+          new Error(
+            "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+          ),
+          "",
+          "",
+        );
         return { stdin: { end() {} } } as ReturnType<typeof execFile>;
       },
     );
@@ -92,16 +100,23 @@ describe("checkRepoVisibility", () => {
     expect(result).toBe("private");
   });
 
-  it('classifies an access-denied error as "private"', async () => {
+  // A transient server error is NOT an auth rejection and must not be assumed private.
+  it('returns "unverifiable" for a transient server error', async () => {
     mockedExecFile.mockImplementation(
       (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
-        cb(new Error("remote: HTTP Basic: Access denied"), "", "");
+        cb(
+          new Error(
+            "fatal: remote error: GitLab is currently unable to handle this request due to load (ID abc123).",
+          ),
+          "",
+          "",
+        );
         return { stdin: { end() {} } } as ReturnType<typeof execFile>;
       },
     );
 
-    const result = await checkRepoVisibility("git@gitlab.com:org/private-repo.git");
-    expect(result).toBe("private");
+    const result = await checkRepoVisibility("git@gitlab.com:org/repo.git");
+    expect(result).toBe("unverifiable");
   });
 
   it('returns "unverifiable" (not "private") when the probe fails for a network reason', async () => {

@@ -33,34 +33,34 @@ export async function checkRepoVisibility(repository: string): Promise<RepoVisib
     await execGitLsRemote(httpsUrl);
     return "public";
   } catch (error) {
-    return indicatesRepoIsPrivate(error) ? "private" : "unverifiable";
+    return rejectedAnonymousAccess(error) ? "private" : "unverifiable";
   }
 }
 
 /**
- * Distinguishes a repo that positively rejects anonymous reads (authentication
- * required, access denied, or hidden as a 404) from a probe that never reached a
- * verdict (DNS failure, timeout, proxy/TLS error, killed process). Only the
- * former proves the repo is private. A failed probe must NOT be treated as
- * private — otherwise a transient network error would silently allow a backup to
- * a repository that might actually be public.
+ * Classifies a failed anonymous `git ls-remote`. Based on the real return values
+ * captured (2026-06) against github.com, gitlab.com and bitbucket.org with
+ * credential helpers and prompts disabled (GIT_TERMINAL_PROMPT=0):
+ *
+ *   - A repo that requires authentication answers with HTTP 401; git then cannot
+ *     read a credential without a prompt and exits 128 with:
+ *       fatal: could not read Username for '<host>': terminal prompts disabled
+ *     This is the one response that proves the repo is not anonymously readable,
+ *     so we treat it as private. (Bitbucket returns this even for public repos,
+ *     so a public Bitbucket repo is treated as private too — it is not readable
+ *     over anonymous git either way.)
+ *
+ *   - Every other failure — DNS error ("Could not resolve host"), a timeout that
+ *     kills the process, a transient 5xx ("unable to handle this request") —
+ *     leaves visibility undetermined and must NOT be assumed private.
+ *
+ * The child runs with LC_ALL=C so git's message stays English; "terminal prompts
+ * disabled" appears only because we disabled prompts and the server demanded
+ * credentials.
  */
-function indicatesRepoIsPrivate(error: unknown): boolean {
+function rejectedAnonymousAccess(error: unknown): boolean {
   const { message, stderr } = error as { message?: string; stderr?: string | Buffer };
-  const combinedOutput = `${message ?? ""} ${stderr ?? ""}`.toLowerCase();
-  const anonymousAccessRejectedSignals = [
-    "authentication failed",
-    "could not read username",
-    "could not read password",
-    "invalid username or password",
-    "access denied",
-    "permission denied",
-    "terminal prompts disabled",
-    "not found",
-    "403",
-    "401",
-  ];
-  return anonymousAccessRejectedSignals.some((signal) => combinedOutput.includes(signal));
+  return `${message ?? ""} ${stderr ?? ""}`.includes("terminal prompts disabled");
 }
 
 function execGitLsRemote(url: string): Promise<void> {
@@ -75,6 +75,7 @@ function execGitLsRemote(url: string): Promise<void> {
           GIT_TERMINAL_PROMPT: "0",
           GIT_ASKPASS: undefined,
           SSH_ASKPASS: undefined,
+          LC_ALL: "C", // keep git's error messages English so classification is locale-stable
         },
       },
       (error, _stdout, stderr) => {
