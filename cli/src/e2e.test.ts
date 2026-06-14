@@ -492,3 +492,38 @@ describe("files outside HOME round-trip", () => {
     expect(fs.readFileSync(path.join(outsideDir, "system.conf"), "utf-8")).toBe(OUTSIDE_CONTENT);
   });
 });
+
+describe("status before first backup", () => {
+  it("nudges to run init when there is no config", () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-noconfig-"));
+    try {
+      const output = run(["status"], testEnv(homeDir));
+      expect(output).toContain("No config found");
+      expect(output).toContain("backdot init");
+    } finally {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("previews what would be backed up when nothing has been backed up yet", () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-prebackup-"));
+    try {
+      const remoteRepo = path.join(homeDir, "remote.git");
+      execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+      fs.writeFileSync(path.join(homeDir, ".zshrc"), "# zshrc\n");
+      fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
+      fs.writeFileSync(
+        path.join(homeDir, ".backdot", "config.json"),
+        JSON.stringify({ repository: remoteRepo, machine: "fresh", paths: ["~/.zshrc"] }, null, 2),
+      );
+
+      const output = run(["status"], testEnv(homeDir));
+      expect(output).toContain("No backup yet");
+      expect(output).toContain("Not yet backed up");
+      expect(output).toContain(".zshrc");
+    } finally {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+});

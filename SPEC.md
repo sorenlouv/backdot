@@ -58,6 +58,8 @@ Lists recent backups, lets the user pick one, then restores from that commit.
 
 Shows: schedule state, repo URL, machine name, encryption status, repo visibility (public/private/unknown), and a per-file comparison against the remote (backed up / modified since last backup / not yet backed up).
 
+Useful before the first backup: with no config it nudges the user to run `init`; with a config but nothing backed up yet it previews every resolved file as "not yet backed up" instead of erroring.
+
 ### `schedule`
 
 Sets up automatic daily backup (macOS only). Backups run daily at 02:00. Re-running `schedule` updates the existing schedule. Warns if encryption is enabled but no key file exists.
