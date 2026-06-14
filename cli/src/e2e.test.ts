@@ -615,3 +615,62 @@ describe("restore --machine", () => {
     }
   });
 });
+
+describe("post-restore hook", () => {
+  // Sets up a machine with a ~/.backdot/post-restore script, backs it up, then
+  // wipes the home dir to simulate a fresh machine ready to restore.
+  function setupBackedUpMachine(hookScript: string): { homeDir: string; remoteRepo: string } {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-hook-"));
+    const remoteRepo = path.join(homeDir, "remote.git");
+    execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+    fs.writeFileSync(path.join(homeDir, ".zshrc"), "# zshrc\n");
+    fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
+    fs.writeFileSync(path.join(homeDir, ".backdot", "post-restore"), hookScript);
+    fs.writeFileSync(
+      path.join(homeDir, ".backdot", "config.json"),
+      JSON.stringify({ repository: remoteRepo, machine: "box", paths: ["~/.zshrc"] }, null, 2),
+    );
+
+    run(["backup"], testEnv(homeDir));
+
+    // Simulate a wiped machine: only the remote survives.
+    fs.rmSync(path.join(homeDir, ".zshrc"));
+    fs.rmSync(path.join(homeDir, ".backdot"), { recursive: true });
+
+    return { homeDir, remoteRepo };
+  }
+
+  it("runs the restored hook after restoring", () => {
+    const { homeDir, remoteRepo } = setupBackedUpMachine('touch "$HOME/provisioned"\n');
+    try {
+      const output = run(["restore", remoteRepo, "--machine", "box", "--yes"], testEnv(homeDir));
+
+      expect(output).toContain("Restored");
+      expect(output).toContain("post-restore hook");
+      expect(fs.existsSync(path.join(homeDir, "provisioned"))).toBe(true);
+      expect(fs.existsSync(path.join(homeDir, ".zshrc"))).toBe(true);
+    } finally {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("surfaces a failing hook as an error, with files already restored", () => {
+    const { homeDir, remoteRepo } = setupBackedUpMachine("exit 3\n");
+    try {
+      let message = "";
+      try {
+        run(["restore", remoteRepo, "--machine", "box", "--yes"], testEnv(homeDir));
+      } catch (err) {
+        message = (err as Error).message;
+      }
+
+      expect(message).toContain("post-restore hook failed");
+      expect(message).toContain("exit code 3");
+      // The file restore completed before the hook ran.
+      expect(fs.existsSync(path.join(homeDir, ".zshrc"))).toBe(true);
+    } finally {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+});

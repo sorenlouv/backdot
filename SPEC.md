@@ -115,6 +115,15 @@ Each machine's files live under `<machine>/` in one of two namespaces, which kee
 - Each backup is a complete snapshot -- files removed from the config are removed from the repo on the next backup.
 - A `README.md` is written at the repo root with restore instructions (including an `npx backdot restore` one-liner).
 
+## Post-restore hook
+
+An optional `~/.backdot/post-restore` script lets a restored machine provision itself (install packages, clone repos, etc.).
+
+- It is an ordinary backed-up file: if it exists, it is automatically included in every backup (like the config file), so it travels with the repo.
+- After `restore` copies files, if the hook was among the files just restored, it is executed once with POSIX `sh` (`/bin/sh ~/.backdot/post-restore`) from the home directory, with output streamed live. It runs only when freshly restored — never a stale on-disk copy the user chose not to restore.
+- A non-zero exit is surfaced as an error (with the exit code) and fails the command; the files themselves were already restored. Not supported on Windows (skipped with a message).
+- The script is code stored in your backup repo and runs with your user privileges — keep the repo private (backup already refuses public repos).
+
 ## Notifications
 
 On macOS, a system notification is shown when a scheduled (background) backup fails, so the user is alerted even when no terminal is visible.
