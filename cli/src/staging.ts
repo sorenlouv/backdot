@@ -14,12 +14,45 @@ export { STAGING_DIR, STAGING_GIT_DIR, machineDir };
 
 const HOME = os.homedir();
 
+// Backed-up files live under one of two namespaces inside the machine dir, which
+// keeps the layout lossless: HOME files restore relative to the restoring machine's
+// own home (portable across machines), while files elsewhere restore to their
+// original absolute path.
+export const HOME_NAMESPACE = "home";
+export const ROOT_NAMESPACE = "root";
+
+function isOutsideHome(filePath: string): boolean {
+  const relativeToHome = path.relative(HOME, filePath);
+  return relativeToHome.startsWith("..") || path.isAbsolute(relativeToHome);
+}
+
 export function getStagedPath(filePath: string, machine: string): string {
-  const relativePath = path.relative(HOME, filePath);
-  // Files outside HOME (e.g. /etc/foo) produce a relative path starting with "..",
-  // which would escape the machine dir. Use the absolute path minus the leading "/" instead.
-  const pathWithinMachineDir = relativePath.startsWith("..") ? filePath.slice(1) : relativePath;
+  const pathWithinMachineDir = isOutsideHome(filePath)
+    ? path.join(ROOT_NAMESPACE, filePath.slice(1)) // strip leading "/" so it stays inside the machine dir
+    : path.join(HOME_NAMESPACE, path.relative(HOME, filePath));
   return path.join(machineDir(machine), pathWithinMachineDir);
+}
+
+export interface RestoreTarget {
+  /** Absolute path the file is restored to on this machine. */
+  destination: string;
+  /** Path shown in the restore picker (e.g. "~/.zshrc" or "/etc/hosts"). */
+  displayPath: string;
+}
+
+/**
+ * Inverse of getStagedPath: maps a path relative to the machine dir
+ * (e.g. "home/.zshrc" or "root/etc/hosts") back to its restore destination.
+ */
+export function getRestoreTarget(machineRelativePath: string): RestoreTarget {
+  const [namespace, ...rest] = machineRelativePath.split(path.sep);
+  const subPath = rest.join(path.sep);
+
+  if (namespace === ROOT_NAMESPACE) {
+    const destination = path.join("/", subPath);
+    return { destination, displayPath: destination };
+  }
+  return { destination: path.join(HOME, subPath), displayPath: path.join("~", subPath) };
 }
 
 export function cleanStaging(machine: string): void {

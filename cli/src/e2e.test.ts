@@ -140,16 +140,18 @@ describe("backdot e2e", () => {
     const verifyDir = path.join(tempDir, "verify-clone");
     cloneRemote(remoteRepo, verifyDir);
 
-    expect(fs.existsSync(path.join(verifyDir, "test-machine", ".zshrc"))).toBe(true);
+    expect(fs.existsSync(path.join(verifyDir, "test-machine", "home", ".zshrc"))).toBe(true);
     expect(
-      fs.existsSync(path.join(verifyDir, "test-machine", ".config", "test", "settings.json")),
+      fs.existsSync(
+        path.join(verifyDir, "test-machine", "home", ".config", "test", "settings.json"),
+      ),
     ).toBe(true);
-    expect(fs.existsSync(path.join(verifyDir, "test-machine", ".backdot", "config.json"))).toBe(
-      true,
-    );
+    expect(
+      fs.existsSync(path.join(verifyDir, "test-machine", "home", ".backdot", "config.json")),
+    ).toBe(true);
     expect(fs.existsSync(path.join(verifyDir, "README.md"))).toBe(true);
 
-    expect(fs.readFileSync(path.join(verifyDir, "test-machine", ".zshrc"), "utf-8")).toBe(
+    expect(fs.readFileSync(path.join(verifyDir, "test-machine", "home", ".zshrc"), "utf-8")).toBe(
       ZSHRC_CONTENT,
     );
 
@@ -265,7 +267,7 @@ describe("negation patterns", () => {
     const verifyDir = path.join(tempDir, "verify-clone");
     cloneRemote(remoteRepo, verifyDir);
 
-    const machineDir = path.join(verifyDir, "negate-machine");
+    const machineDir = path.join(verifyDir, "negate-machine", "home");
 
     expect(fs.existsSync(path.join(machineDir, ".config", "app", "config.json"))).toBe(true);
 
@@ -339,7 +341,7 @@ describe("concurrent multi-machine backup", () => {
     cloneRemote(remoteRepo, verifyDir);
 
     for (const m of machines) {
-      const filePath = path.join(verifyDir, m.name, m.file);
+      const filePath = path.join(verifyDir, m.name, "home", m.file);
       expect(fs.existsSync(filePath)).toBe(true);
       expect(fs.readFileSync(filePath, "utf-8")).toBe(`${m.content}# updated\n`);
     }
@@ -396,10 +398,10 @@ describe("encrypted backup and restore", () => {
     const verifyDir = path.join(tempDir, "verify-clone");
     cloneRemote(remoteRepo, verifyDir);
 
-    const plaintextFile = path.join(verifyDir, "enc-machine", ".zshrc");
+    const plaintextFile = path.join(verifyDir, "enc-machine", "home", ".zshrc");
     expect(fs.existsSync(plaintextFile)).toBe(false);
 
-    const encryptedFile = path.join(verifyDir, "enc-machine", ".zshrc.encrypted");
+    const encryptedFile = path.join(verifyDir, "enc-machine", "home", ".zshrc.encrypted");
     expect(fs.existsSync(encryptedFile)).toBe(true);
 
     const content = fs.readFileSync(encryptedFile);
@@ -431,5 +433,62 @@ describe("encrypted backup and restore", () => {
   it("status works with encryption", () => {
     const output = run(["status"], env);
     expect(output).toContain("backed up");
+  });
+});
+
+describe("files outside HOME round-trip", () => {
+  let homeDir: string;
+  let outsideDir: string;
+  let remoteRepo: string;
+  let env: NodeJS.ProcessEnv;
+
+  const OUTSIDE_CONTENT = "# system-level config\n";
+
+  beforeAll(() => {
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-home-"));
+    outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-outside-"));
+
+    remoteRepo = path.join(homeDir, "remote.git");
+    execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+    fs.writeFileSync(path.join(outsideDir, "system.conf"), OUTSIDE_CONTENT);
+
+    fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
+    fs.writeFileSync(
+      path.join(homeDir, ".backdot", "config.json"),
+      JSON.stringify(
+        {
+          repository: remoteRepo,
+          machine: "outside-machine",
+          paths: [path.join(outsideDir, "system.conf")],
+        },
+        null,
+        2,
+      ),
+    );
+
+    env = testEnv(homeDir);
+  });
+
+  afterAll(() => {
+    fs.rmSync(homeDir, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  });
+
+  it("stores files outside HOME under root/ and restores them to their absolute path", () => {
+    expect(run(["backup"], env)).toContain("Backup complete");
+
+    const verifyDir = path.join(homeDir, "verify-clone");
+    cloneRemote(remoteRepo, verifyDir);
+    // Files outside HOME use the root/ namespace, never home/.
+    expect(fs.existsSync(path.join(verifyDir, "outside-machine", "root"))).toBe(true);
+    fs.rmSync(verifyDir, { recursive: true, force: true });
+
+    // Delete the original, then restore: it must come back at the same absolute
+    // path, not somewhere under HOME.
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+    expect(run(["restore", remoteRepo, "--yes"], env)).toContain("Restored");
+
+    expect(fs.readFileSync(path.join(outsideDir, "system.conf"), "utf-8")).toBe(OUTSIDE_CONTENT);
   });
 });

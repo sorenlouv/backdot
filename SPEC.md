@@ -105,8 +105,10 @@ Shows help. Nudges toward `init` if no config file exists.
 
 ## File Layout in the Backup Repo
 
-- Files are stored at `<machine>/<path-relative-to-HOME>` (e.g. `my-laptop/.zshrc`).
-- Files outside HOME use their absolute path minus the leading `/` (e.g. `/etc/foo` becomes `<machine>/etc/foo`).
+Each machine's files live under `<machine>/` in one of two namespaces, which keeps the layout lossless and lets restore put every file back in the right place:
+
+- Files under HOME are stored at `<machine>/home/<path-relative-to-HOME>` (e.g. `my-laptop/home/.zshrc`). On restore they are written relative to the _restoring_ machine's HOME, so dotfiles stay portable across machines with different home paths.
+- Files outside HOME are stored at `<machine>/root/<absolute-path-minus-leading-slash>` (e.g. `/etc/foo` becomes `my-laptop/root/etc/foo`). On restore they are written back to their original absolute path.
 - Each backup is a complete snapshot -- files removed from the config are removed from the repo on the next backup.
 - A `README.md` is written at the repo root with restore instructions (including an `npx backdot restore` one-liner).
 
