@@ -38,7 +38,7 @@ Resolves files from config, refuses if the repo is public, syncs with the remote
 Works with or without an existing config:
 
 - **With config:** uses the configured repo and machine.
-- **With a URL argument:** clones the repo and discovers available machines. If multiple machines exist, the user picks one. This makes restore self-bootstrapping on a blank machine.
+- **With a URL argument:** clones the repo and discovers available machines. If multiple machines exist, the user picks one interactively (or names one with `--machine`). This makes restore self-bootstrapping on a blank machine, with no pre-existing config required.
 
 Files are shown in an interactive picker:
 
@@ -47,6 +47,7 @@ Files are shown in an interactive picker:
 
 Options:
 
+- `--machine <name>` selects which machine to restore, without the interactive picker. Required when multiple machines exist and there is no interactive terminal (otherwise restore errors and lists the available machines). If the name is unknown, restore fails and lists the available machines. With a config, `--machine` overrides the configured machine; the repository still comes from config.
 - `--commit <sha>` restores from a specific earlier backup.
 - `--yes` (`-y`) accepts defaults without prompting. With `--yes`, only new files are restored; existing files are skipped.
 
@@ -113,6 +114,15 @@ Each machine's files live under `<machine>/` in one of two namespaces, which kee
 - Files outside HOME are stored at `<machine>/root/<absolute-path-minus-leading-slash>` (e.g. `/etc/foo` becomes `my-laptop/root/etc/foo`). On restore they are written back to their original absolute path.
 - Each backup is a complete snapshot -- files removed from the config are removed from the repo on the next backup.
 - A `README.md` is written at the repo root with restore instructions (including an `npx backdot restore` one-liner).
+
+## Post-restore hook
+
+An optional `~/.backdot/post-restore` script lets a restored machine provision itself (install packages, clone repos, etc.).
+
+- It is an ordinary backed-up file: if it exists, it is automatically included in every backup (like the config file), so it travels with the repo.
+- After `restore` copies files, if the hook was among the files just restored, it is executed once with POSIX `sh` (`/bin/sh ~/.backdot/post-restore`) from the home directory, with output streamed live. It runs only when freshly restored — never a stale on-disk copy the user chose not to restore.
+- A non-zero exit is surfaced as an error (with the exit code) and fails the command; the files themselves were already restored. Not supported on Windows (skipped with a message).
+- The script is code stored in your backup repo and runs with your user privileges — keep the repo private (backup already refuses public repos).
 
 ## Notifications
 

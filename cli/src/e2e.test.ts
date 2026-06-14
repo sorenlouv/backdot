@@ -527,3 +527,150 @@ describe("status before first backup", () => {
     }
   });
 });
+
+describe("restore --machine", () => {
+  let tempDir: string;
+  let remoteRepo: string;
+
+  const machines = [
+    { name: "laptop", file: ".zshrc", content: "# laptop\n" },
+    { name: "server", file: ".bashrc", content: "# server\n" },
+  ];
+
+  // Captures the failure message of a command expected to exit non-zero.
+  function failureOutput(args: string[], env: NodeJS.ProcessEnv): string {
+    try {
+      run(args, env);
+    } catch (err) {
+      return (err as Error).message;
+    }
+    throw new Error("expected the command to fail, but it succeeded");
+  }
+
+  beforeAll(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-machineflag-"));
+    remoteRepo = path.join(tempDir, "remote.git");
+    execSync(`git init --bare -b main "${remoteRepo}"`, { stdio: "ignore" });
+
+    for (const m of machines) {
+      const homeDir = path.join(tempDir, m.name);
+      fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
+      fs.writeFileSync(path.join(homeDir, m.file), m.content);
+      fs.writeFileSync(
+        path.join(homeDir, ".backdot", "config.json"),
+        JSON.stringify(
+          { repository: remoteRepo, machine: m.name, paths: [`~/${m.file}`] },
+          null,
+          2,
+        ),
+      );
+      run(["backup"], testEnv(homeDir));
+    }
+  });
+
+  afterAll(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("restores the named machine into a config-less HOME", () => {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    try {
+      const output = run(
+        ["restore", remoteRepo, "--machine", "server", "--yes"],
+        testEnv(freshHome),
+      );
+      expect(output).toContain("Restored");
+      expect(fs.readFileSync(path.join(freshHome, ".bashrc"), "utf-8")).toBe("# server\n");
+      expect(fs.existsSync(path.join(freshHome, ".zshrc"))).toBe(false);
+    } finally {
+      fs.rmSync(freshHome, { recursive: true, force: true });
+    }
+  });
+
+  it("errors and lists machines when --machine names an unknown machine", () => {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    try {
+      const message = failureOutput(
+        ["restore", remoteRepo, "--machine", "nope", "--yes"],
+        testEnv(freshHome),
+      );
+      expect(message).toContain('No backup found for machine "nope"');
+      expect(message).toContain("laptop");
+      expect(message).toContain("server");
+    } finally {
+      fs.rmSync(freshHome, { recursive: true, force: true });
+    }
+  });
+
+  it("errors and lists machines when multiple exist, no --machine, and no TTY", () => {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    try {
+      const message = failureOutput(["restore", remoteRepo, "--yes"], testEnv(freshHome));
+      expect(message).toContain("Multiple machines found");
+      expect(message).toContain("--machine");
+      expect(message).toContain("laptop");
+      expect(message).toContain("server");
+    } finally {
+      fs.rmSync(freshHome, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("post-restore hook", () => {
+  // Sets up a machine with a ~/.backdot/post-restore script, backs it up, then
+  // wipes the home dir to simulate a fresh machine ready to restore.
+  function setupBackedUpMachine(hookScript: string): { homeDir: string; remoteRepo: string } {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-hook-"));
+    const remoteRepo = path.join(homeDir, "remote.git");
+    execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+    fs.writeFileSync(path.join(homeDir, ".zshrc"), "# zshrc\n");
+    fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
+    fs.writeFileSync(path.join(homeDir, ".backdot", "post-restore"), hookScript);
+    fs.writeFileSync(
+      path.join(homeDir, ".backdot", "config.json"),
+      JSON.stringify({ repository: remoteRepo, machine: "box", paths: ["~/.zshrc"] }, null, 2),
+    );
+
+    run(["backup"], testEnv(homeDir));
+
+    // Simulate a wiped machine: only the remote survives.
+    fs.rmSync(path.join(homeDir, ".zshrc"));
+    fs.rmSync(path.join(homeDir, ".backdot"), { recursive: true });
+
+    return { homeDir, remoteRepo };
+  }
+
+  it("runs the restored hook after restoring", () => {
+    const { homeDir, remoteRepo } = setupBackedUpMachine('touch "$HOME/provisioned"\n');
+    try {
+      const output = run(["restore", remoteRepo, "--machine", "box", "--yes"], testEnv(homeDir));
+
+      expect(output).toContain("Restored");
+      expect(output).toContain("post-restore hook");
+      expect(fs.existsSync(path.join(homeDir, "provisioned"))).toBe(true);
+      expect(fs.existsSync(path.join(homeDir, ".zshrc"))).toBe(true);
+    } finally {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("surfaces a failing hook as an error, with files already restored", () => {
+    const { homeDir, remoteRepo } = setupBackedUpMachine("exit 3\n");
+    try {
+      let message = "";
+      try {
+        run(["restore", remoteRepo, "--machine", "box", "--yes"], testEnv(homeDir));
+      } catch (err) {
+        message = (err as Error).message;
+      }
+
+      expect(message).toContain("post-restore hook failed");
+      expect(message).toContain("exit code 3");
+      // The file restore completed before the hook ran.
+      expect(fs.existsSync(path.join(homeDir, ".zshrc"))).toBe(true);
+    } finally {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+});
