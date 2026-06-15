@@ -72,6 +72,7 @@ Add a `~/.backdot/post-restore` shell script which will be executed after `backd
 | `restore [url] --commit <sha>` | Restore from a specific backup commit          |
 | `restore [url] --machine <name>` | Restore a specific machine non-interactively |
 | `restore [url] --yes` (`-y`)   | Restore new files non-interactively (skips existing files) |
+| `restore [url] --dry-run`      | Preview what restore would change, without writing any files |
 | `history [url]`                | Browse and restore a previous backup           |
 | `schedule`                     | Schedule automatic daily backup (Mac-only)     |
 | `unschedule`                   | Unschedule the daily backup                    |

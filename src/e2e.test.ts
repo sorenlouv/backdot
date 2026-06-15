@@ -753,3 +753,127 @@ describe("user-authored files in the machine dir", () => {
     }
   });
 });
+
+describe("restore --dry-run", () => {
+  let tempDir: string;
+  let remoteRepo: string;
+  let env: NodeJS.ProcessEnv;
+
+  const ORIGINAL_ZSHRC = "# original zshrc\n";
+  const LOCAL_EDIT = "# locally edited zshrc\n";
+  const SETTINGS = '{"theme":"dark"}\n';
+
+  beforeAll(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-dryrun-"));
+    remoteRepo = path.join(tempDir, "remote.git");
+    execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+    fs.writeFileSync(path.join(tempDir, ".zshrc"), ORIGINAL_ZSHRC);
+    fs.mkdirSync(path.join(tempDir, ".config", "test"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".config", "test", "settings.json"), SETTINGS);
+
+    fs.mkdirSync(path.join(tempDir, ".backdot"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempDir, ".backdot", "config.json"),
+      JSON.stringify(
+        {
+          repository: remoteRepo,
+          machine: "dry-machine",
+          paths: ["~/.zshrc", "~/.config/test/**"],
+        },
+        null,
+        2,
+      ),
+    );
+    env = testEnv(tempDir);
+
+    run(["backup"], env);
+  });
+
+  afterAll(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("previews creates and overwrites with a diff, writing nothing, and works in a non-TTY", () => {
+    // One backed-up file now diverges locally; another is missing locally (so a
+    // real restore would create it).
+    fs.writeFileSync(path.join(tempDir, ".zshrc"), LOCAL_EDIT);
+    fs.rmSync(path.join(tempDir, ".config", "test", "settings.json"));
+
+    // No --no-overwrite, yet this must NOT throw the "interactive" error in a
+    // non-TTY: dry-run returns before the picker.
+    const output = run(["restore", remoteRepo, "--dry-run"], env);
+
+    expect(output).toContain("Dry run");
+    expect(output).toContain("no files will be written");
+
+    expect(output).toContain("will be created");
+    expect(output).toContain("settings.json");
+
+    expect(output).toContain("overwrites your local copy");
+    // The unified diff shows the local line (removed) and the backup line (added).
+    expect(output).toContain("locally edited zshrc");
+    expect(output).toContain("original zshrc");
+
+    // Nothing was written: the edited file is untouched and the deleted file was
+    // not recreated.
+    expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(LOCAL_EDIT);
+    expect(fs.existsSync(path.join(tempDir, ".config", "test", "settings.json"))).toBe(false);
+  });
+
+  it("reports existing files as left untouched with --no-overwrite", () => {
+    // .zshrc is still the local edit from the previous test, so it is "existing".
+    const output = run(["restore", remoteRepo, "--dry-run", "--no-overwrite"], env);
+    expect(output).toContain("left untouched");
+    expect(output).toContain("will be created");
+    expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(LOCAL_EDIT);
+    expect(fs.existsSync(path.join(tempDir, ".config", "test", "settings.json"))).toBe(false);
+  });
+});
+
+describe("restore --dry-run with encryption", () => {
+  let tempDir: string;
+  let remoteRepo: string;
+  let env: NodeJS.ProcessEnv;
+
+  const ORIGINAL = "# original secret\n";
+  const LOCAL_EDIT = "# tampered secret\n";
+  const PASSWORD = "dry-run-enc-password";
+
+  beforeAll(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-dryrun-enc-"));
+    remoteRepo = path.join(tempDir, "remote.git");
+    execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+    fs.writeFileSync(path.join(tempDir, ".zshrc"), ORIGINAL);
+    fs.mkdirSync(path.join(tempDir, ".backdot"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempDir, ".backdot", "config.json"),
+      JSON.stringify(
+        { repository: remoteRepo, machine: "enc-dry", paths: ["~/.zshrc"], encrypt: true },
+        null,
+        2,
+      ),
+    );
+    env = { ...testEnv(tempDir), BACKDOT_PASSWORD: PASSWORD };
+
+    run(["backup"], env);
+  });
+
+  afterAll(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("decrypts the backup to diff an encrypted file, writing nothing", () => {
+    fs.writeFileSync(path.join(tempDir, ".zshrc"), LOCAL_EDIT);
+
+    const output = run(["restore", remoteRepo, "--dry-run"], env);
+
+    expect(output).toContain("overwrites your local copy");
+    // The diff is computed from decrypted backup content, not ciphertext.
+    expect(output).toContain("tampered secret");
+    expect(output).toContain("original secret");
+
+    expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(LOCAL_EDIT);
+  });
+});
