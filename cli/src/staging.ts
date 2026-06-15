@@ -4,7 +4,7 @@ import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { simpleGit } from "simple-git";
 import { logger } from "./log.js";
-import { errorMessage, pluralize } from "./utils.js";
+import { pluralize } from "./utils.js";
 import { ensureRemoteUrl, getCurrentBranch, gitError } from "./git.js";
 import { STAGING_DIR, STAGING_GIT_DIR, machineDir } from "./paths.js";
 import { encrypt, decrypt, type DerivedKey } from "./crypto/encryption.js";
@@ -33,6 +33,14 @@ export function getStagedPath(filePath: string, machine: string): string {
   return path.join(machineDir(machine), pathWithinMachineDir);
 }
 
+/**
+ * git stores and reports repo paths with forward slashes on every platform, so
+ * normalize OS-native separators before comparing against `git ls-tree` output.
+ */
+function toRepoRelativePath(stagedPath: string): string {
+  return path.relative(STAGING_DIR, stagedPath).split(path.sep).join("/");
+}
+
 export interface RestoreTarget {
   /** Absolute path the file is restored to on this machine. */
   destination: string;
@@ -45,7 +53,7 @@ export interface RestoreTarget {
  * (e.g. "home/.zshrc" or "root/etc/hosts") back to its restore destination.
  */
 export function getRestoreTarget(machineRelativePath: string): RestoreTarget {
-  const [namespace, ...rest] = machineRelativePath.split(path.sep);
+  const [namespace, ...rest] = machineRelativePath.split(/[/\\]/);
   const subPath = rest.join(path.sep);
 
   if (namespace === ROOT_NAMESPACE) {
@@ -102,11 +110,6 @@ export interface ComparisonResult {
   modified: string[];
   notBackedUp: string[];
   remoteIsEmpty?: boolean;
-  error?: string;
-}
-
-function failedComparisonResult(err: unknown): ComparisonResult {
-  return { backedUp: [], modified: [], notBackedUp: [], error: errorMessage(err) };
 }
 
 // This machine has no snapshot in the remote yet, so every file counts as "not
@@ -136,32 +139,22 @@ export async function compareFiles(opts: {
     await ensureRemoteUrl(repository);
     await git.fetch("origin");
   } catch (err) {
-    return failedComparisonResult(gitError(err, repository));
+    throw gitError(err, repository);
   }
 
-  let branch: string;
-  try {
-    branch = await getCurrentBranch(git);
-  } catch (err) {
-    return failedComparisonResult(err);
-  }
+  const branch = await getCurrentBranch(git);
 
-  let remoteBlobHashes: Map<string, string>;
-  try {
-    const treeOutput = execFileSync("git", ["ls-tree", "-r", `origin/${branch}`, `${machine}/`], {
-      encoding: "utf-8",
-      cwd: STAGING_DIR,
-    });
-    remoteBlobHashes = new Map(
-      treeOutput
-        .split("\n")
-        .map((line) => line.match(/^\d+ blob ([0-9a-f]+)\t(.+)$/))
-        .filter((match): match is RegExpMatchArray => match !== null)
-        .map((match) => [match[2], match[1]] as const),
-    );
-  } catch (err) {
-    return failedComparisonResult(err);
-  }
+  const treeOutput = execFileSync("git", ["ls-tree", "-r", `origin/${branch}`, `${machine}/`], {
+    encoding: "utf-8",
+    cwd: STAGING_DIR,
+  });
+  const remoteBlobHashes = new Map(
+    treeOutput
+      .split("\n")
+      .map((line) => line.match(/^\d+ blob ([0-9a-f]+)\t(.+)$/))
+      .filter((match): match is RegExpMatchArray => match !== null)
+      .map((match) => [match[2], match[1]] as const),
+  );
 
   // Repo reachable but this machine has nothing backed up yet (empty repo, or it
   // only holds other machines). Treat as a pre-backup preview.
@@ -192,16 +185,11 @@ export async function compareFiles(opts: {
     );
   }
 
-  let localFileHashes: string[];
-  try {
-    const hashOutput = execFileSync("git", ["hash-object", "--stdin-paths"], {
-      encoding: "utf-8",
-      input: files.join("\n") + "\n",
-    });
-    localFileHashes = hashOutput.trim().split("\n");
-  } catch (err) {
-    return failedComparisonResult(err);
-  }
+  const hashOutput = execFileSync("git", ["hash-object", "--stdin-paths"], {
+    encoding: "utf-8",
+    input: files.join("\n") + "\n",
+  });
+  const localFileHashes = hashOutput.trim().split("\n");
 
   const localHashByFile = new Map(files.map((file, i) => [file, localFileHashes[i]]));
   return compareFilesToRemote(files, machine, remoteBlobHashes, "", (file, remoteBlobHash) => {
@@ -219,7 +207,7 @@ function compareFilesToRemote(
   const result: ComparisonResult = { backedUp: [], modified: [], notBackedUp: [] };
 
   for (const file of files) {
-    const repoRelativePath = path.relative(STAGING_DIR, getStagedPath(file, machine)) + pathSuffix;
+    const repoRelativePath = toRepoRelativePath(getStagedPath(file, machine)) + pathSuffix;
     const remoteBlobHash = remoteBlobHashes.get(repoRelativePath);
 
     if (!remoteBlobHash) {

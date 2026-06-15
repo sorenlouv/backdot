@@ -26,6 +26,13 @@ export async function history(repoUrl?: string): Promise<void> {
     return;
   }
 
+  if (!process.stdin.isTTY) {
+    throw new Error(
+      "Browsing history is interactive.\n" +
+        "  Use `restore --commit <sha>` to restore a specific backup non-interactively.",
+    );
+  }
+
   const selectedCommitHash = await select({
     message: "Select a backup to restore from:",
     loop: false,

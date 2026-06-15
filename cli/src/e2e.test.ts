@@ -614,6 +614,31 @@ describe("restore --machine", () => {
       fs.rmSync(freshHome, { recursive: true, force: true });
     }
   });
+
+  it("errors with a clear message when restore runs without --yes in a non-TTY", () => {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    try {
+      const message = failureOutput(
+        ["restore", remoteRepo, "--machine", "laptop"],
+        testEnv(freshHome),
+      );
+      expect(message).toContain("interactive");
+      expect(message).toContain("--yes");
+    } finally {
+      fs.rmSync(freshHome, { recursive: true, force: true });
+    }
+  });
+
+  it("errors with a clear message when history runs in a non-TTY", () => {
+    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    try {
+      const message = failureOutput(["history", remoteRepo], testEnv(freshHome));
+      expect(message).toContain("interactive");
+      expect(message).toContain("restore --commit");
+    } finally {
+      fs.rmSync(freshHome, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("post-restore hook", () => {

@@ -179,6 +179,14 @@ export async function restore({
       console.log();
     }
   } else {
+    if (!process.stdin.isTTY) {
+      throw new Error(
+        "Selecting files to restore is interactive.\n" +
+          "  Re-run with --yes to restore new files non-interactively (existing files are skipped),\n" +
+          "  or run in a terminal to choose which files to restore.",
+      );
+    }
+
     const choices: Array<{ name: string; value: FileMapping; checked: boolean } | Separator> = [];
 
     if (newFiles.length > 0) {

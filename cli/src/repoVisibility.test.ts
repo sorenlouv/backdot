@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("node:child_process", () => ({
-  execFile: vi.fn(),
+vi.mock("node:https", () => ({
+  default: { get: vi.fn() },
 }));
 
-import { execFile } from "node:child_process";
+import https from "node:https";
 import { toHttpsUrl, checkRepoVisibility } from "./repoVisibility.js";
 
 describe("toHttpsUrl", () => {
@@ -52,82 +52,89 @@ describe("toHttpsUrl", () => {
 });
 
 describe("checkRepoVisibility", () => {
-  const mockedExecFile = vi.mocked(execFile);
+  const mockedGet = vi.mocked(https.get);
+
+  type ResponseCallback = (response: { statusCode?: number; resume: () => void }) => void;
+  interface FakeRequest {
+    on(event: string, handler: (error: Error) => void): FakeRequest;
+    destroy(error?: Error): void;
+  }
+
+  // Resolve the probe with an HTTP status code (empty body).
+  function respondWithStatus(statusCode: number) {
+    mockedGet.mockImplementation(((_url: string, _options: unknown, callback: ResponseCallback) => {
+      callback({ statusCode, resume: () => {} });
+      const request: FakeRequest = { on: () => request, destroy: () => {} };
+      return request;
+    }) as unknown as typeof https.get);
+  }
+
+  // Reject the probe with a connection-level error (the response callback never fires).
+  function failWith(error: Error) {
+    mockedGet.mockImplementation((() => {
+      const request: FakeRequest = {
+        on(event, handler) {
+          if (event === "error") {
+            handler(error);
+          }
+          return request;
+        },
+        destroy: () => {},
+      };
+      return request;
+    }) as unknown as typeof https.get);
+  }
 
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
-  it('returns "public" when anonymous ls-remote succeeds', async () => {
-    mockedExecFile.mockImplementation(
-      (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
-        cb(null, "", "");
-        return { stdin: { end() {} } } as ReturnType<typeof execFile>;
-      },
-    );
+  it('returns "public" when the refs endpoint answers 200', async () => {
+    respondWithStatus(200);
 
     const result = await checkRepoVisibility("git@github.com:user/repo.git");
     expect(result).toBe("public");
 
-    expect(mockedExecFile).toHaveBeenCalledWith(
-      "git",
-      ["-c", "credential.helper=", "ls-remote", "--quiet", "https://github.com/user/repo.git"],
-      expect.objectContaining({
-        timeout: 10_000,
-        env: expect.objectContaining({ GIT_TERMINAL_PROMPT: "0" }),
-      }),
+    expect(mockedGet).toHaveBeenCalledWith(
+      "https://github.com/user/repo.git/info/refs?service=git-upload-pack",
+      expect.objectContaining({ timeout: 10_000 }),
       expect.any(Function),
     );
   });
 
-  it('returns "private" when anonymous ls-remote fails', async () => {
-    mockedExecFile.mockImplementation(
-      (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
-        cb(new Error("fatal: Authentication failed"), "", "");
-        return { stdin: { end() {} } } as ReturnType<typeof execFile>;
-      },
-    );
+  it.each([401, 403, 404])(
+    'returns "private" when the refs endpoint answers %i',
+    async (status) => {
+      respondWithStatus(status);
+      expect(await checkRepoVisibility("git@github.com:user/private-repo.git")).toBe("private");
+    },
+  );
 
-    const result = await checkRepoVisibility("git@github.com:user/private-repo.git");
-    expect(result).toBe("private");
+  it('returns "unverifiable" for an unexpected status (e.g. 500)', async () => {
+    respondWithStatus(500);
+    expect(await checkRepoVisibility("git@gitlab.com:org/repo.git")).toBe("unverifiable");
   });
 
-  it('returns "unknown" for unrecognized hosts', async () => {
+  it('returns "unverifiable" (not "private") when the request fails to connect', async () => {
+    failWith(Object.assign(new Error("getaddrinfo ENOTFOUND github.com"), { code: "ENOTFOUND" }));
+    expect(await checkRepoVisibility("git@github.com:user/repo.git")).toBe("unverifiable");
+  });
+
+  it('returns "unknown" for unrecognized hosts without probing', async () => {
     const result = await checkRepoVisibility("git@selfhosted.example.com:user/repo.git");
     expect(result).toBe("unknown");
-    expect(mockedExecFile).not.toHaveBeenCalled();
+    expect(mockedGet).not.toHaveBeenCalled();
   });
 
-  it("strips GIT_ASKPASS and SSH_ASKPASS from the child process env", async () => {
-    const savedAskpass = process.env.GIT_ASKPASS;
-    const savedSshAskpass = process.env.SSH_ASKPASS;
-    process.env.GIT_ASKPASS = "/fake/ide/askpass.sh";
-    process.env.SSH_ASKPASS = "/fake/ide/ssh-askpass.sh";
+  it("probes a credential-free URL and sends no Authorization header", async () => {
+    respondWithStatus(200);
+    await checkRepoVisibility("https://user:pass@github.com/user/repo.git");
 
-    try {
-      mockedExecFile.mockImplementation(
-        (_cmd: string, _args: unknown, _opts: unknown, cb: (...a: unknown[]) => void) => {
-          cb(null, "", "");
-          return { stdin: { end() {} } } as ReturnType<typeof execFile>;
-        },
-      );
-
-      await checkRepoVisibility("git@github.com:user/repo.git");
-
-      const opts = mockedExecFile.mock.calls[0][2] as { env: Record<string, unknown> };
-      expect(opts.env.GIT_ASKPASS).toBeUndefined();
-      expect(opts.env.SSH_ASKPASS).toBeUndefined();
-    } finally {
-      if (savedAskpass === undefined) {
-        delete process.env.GIT_ASKPASS;
-      } else {
-        process.env.GIT_ASKPASS = savedAskpass;
-      }
-      if (savedSshAskpass === undefined) {
-        delete process.env.SSH_ASKPASS;
-      } else {
-        process.env.SSH_ASKPASS = savedSshAskpass;
-      }
-    }
+    const [url, options] = mockedGet.mock.calls[0];
+    expect(url).toBe("https://github.com/user/repo.git/info/refs?service=git-upload-pack");
+    const headers = (options as { headers?: Record<string, string> }).headers ?? {};
+    expect(Object.keys(headers).map((header) => header.toLowerCase())).not.toContain(
+      "authorization",
+    );
   });
 });

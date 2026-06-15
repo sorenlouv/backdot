@@ -216,7 +216,6 @@ describe("compareFiles", () => {
 
     const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
 
-    expect(result.error).toBeUndefined();
     expect(result.remoteIsEmpty).toBe(true);
     expect(result.notBackedUp).toEqual(files);
     expect(result.backedUp).toEqual([]);
@@ -276,7 +275,7 @@ describe("compareFiles", () => {
     expect(result.modified).toEqual([]);
   });
 
-  it("returns error when ls-tree fails", async () => {
+  it("throws when ls-tree fails", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.fetch.mockResolvedValue(undefined);
     mockGit.revparse.mockResolvedValue("main");
@@ -286,40 +285,38 @@ describe("compareFiles", () => {
     });
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
-
-    expect(result.error).toContain("fatal: not a tree object");
+    await expect(compareFiles({ files, machine: MACHINE, repository: REPO })).rejects.toThrow(
+      "fatal: not a tree object",
+    );
   });
 
-  it("returns error when revparse fails", async () => {
+  it("throws when revparse fails", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.fetch.mockResolvedValue(undefined);
     mockGit.revparse.mockRejectedValue(new Error("HEAD not found"));
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
-
-    expect(result.error).toContain("HEAD not found");
+    await expect(compareFiles({ files, machine: MACHINE, repository: REPO })).rejects.toThrow(
+      "HEAD not found",
+    );
   });
 
-  it("returns friendly error when fetch fails", async () => {
+  it("throws a friendly error when fetch fails", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.fetch.mockRejectedValue(new Error("Could not resolve host"));
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
-
-    expect(result.error).toBe("Could not connect to remote host. Check your internet connection.");
+    await expect(compareFiles({ files, machine: MACHINE, repository: REPO })).rejects.toThrow(
+      "Could not connect to remote host. Check your internet connection.",
+    );
   });
 
-  it("returns friendly error for not-found repository", async () => {
+  it("throws a friendly error for a not-found repository", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     mockGit.fetch.mockRejectedValue(new Error("remote: Repository not found."));
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
-
-    expect(result.error).toBe(
+    await expect(compareFiles({ files, machine: MACHINE, repository: REPO })).rejects.toThrow(
       `Repository "${REPO}" not found. Check the URL and that you have access.`,
     );
   });

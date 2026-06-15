@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 22+
+- Node.js 18+ (the published package supports Node 18+; CI runs the test suite on Node 22)
 - npm
 
 ## Getting Started
