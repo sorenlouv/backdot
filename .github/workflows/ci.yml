@@ -43,22 +43,14 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: cli/package-lock.json
 
       - run: npm ci
-        working-directory: cli
       - run: npm run lint
-        working-directory: cli
       - run: npm run fmt:check
-        working-directory: cli
       - run: npm run build
-        working-directory: cli
       - run: npm test
-        working-directory: cli
       - run: npm run test:integration
-        working-directory: cli
       - run: npm run test:e2e
-        working-directory: cli
 
   # Publishes a new version to npm on every merge to main (patch bump), or a
   # minor/major when triggered manually via "Run workflow". Authenticates to npm
@@ -90,7 +82,6 @@ jobs:
           node-version: 24
           registry-url: "https://registry.npmjs.org" # pins the registry for the OIDC token exchange
           cache: npm
-          cache-dependency-path: cli/package-lock.json
 
       # OIDC trusted publishing needs npm >= 11.5.1, which is newer than the npm
       # bundled with Node, so upgrade before publishing.
@@ -99,23 +90,20 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: cli
 
       - name: Build
         run: npm run build
-        working-directory: cli
 
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # Bump package.json + package-lock.json only. `npm version` run from the
-      # cli/ subdirectory creates the tag but NOT the commit, so we use
-      # --no-git-tag-version and make the commit + tag ourselves below.
+      # Bump package.json + package-lock.json only. We use --no-git-tag-version
+      # and make the commit + tag ourselves below, so we control the commit
+      # message ("[skip ci]") and exactly what gets staged.
       - name: Bump version
         id: version
-        working-directory: cli
         run: |
           npm version "${{ inputs.release_type || 'patch' }}" --no-git-tag-version
           echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
@@ -126,7 +114,7 @@ jobs:
       # re-triggering the workflow.
       - name: Commit, tag, and push
         run: |
-          git add cli/package.json cli/package-lock.json
+          git add package.json package-lock.json
           git commit -m "chore(release): ${{ steps.version.outputs.tag }} [skip ci]"
           git tag -a "${{ steps.version.outputs.tag }}" -m "${{ steps.version.outputs.tag }}"
           git push --follow-tags origin "HEAD:${{ github.ref_name }}"
@@ -135,7 +123,6 @@ jobs:
       # npm authenticates via OIDC and attaches provenance automatically.
       - name: Publish to npm
         run: npm publish
-        working-directory: cli
 
       - name: Create GitHub release
         env:

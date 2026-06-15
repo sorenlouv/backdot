@@ -30,7 +30,7 @@
     "fmt:check": "prettier --check src/",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "prepare": "cd .. && husky",
+    "prepare": "husky",
     "start": "node dist/cli.js",
     "test": "vitest run --exclude src/e2e.test.ts --exclude src/git.integration.test.ts",
     "test:all": "npm run build && vitest run",
