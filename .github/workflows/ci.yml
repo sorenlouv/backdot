@@ -110,20 +110,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # "[skip ci]" plus the GITHUB_TOKEN recursion guard keep this bump commit
-      # from re-triggering the workflow. "%s" is replaced by the new version.
+      # Bump package.json + package-lock.json only. `npm version` run from the
+      # cli/ subdirectory creates the tag but NOT the commit, so we use
+      # --no-git-tag-version and make the commit + tag ourselves below.
       - name: Bump version
         id: version
         working-directory: cli
         run: |
-          new_version=$(npm version "${{ inputs.release_type || 'patch' }}" -m "chore(release): %s [skip ci]")
-          echo "tag=$new_version" >> "$GITHUB_OUTPUT"
+          npm version "${{ inputs.release_type || 'patch' }}" --no-git-tag-version
+          echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      # Push the bump commit + tag BEFORE publishing. If this push fails, nothing
-      # has been published yet, so re-running the job recovers cleanly. (Publishing
-      # first and failing the push would leave npm ahead of main and wedge releases.)
-      - name: Push version bump and tag
-        run: git push --follow-tags origin "HEAD:${{ github.ref_name }}"
+      # Commit, tag, and push BEFORE publishing. If this push fails, nothing has
+      # been published yet, so re-running the job recovers cleanly. "[skip ci]"
+      # plus the GITHUB_TOKEN recursion guard keep the bump commit from
+      # re-triggering the workflow.
+      - name: Commit, tag, and push
+        run: |
+          git add cli/package.json cli/package-lock.json
+          git commit -m "chore(release): ${{ steps.version.outputs.tag }} [skip ci]"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "${{ steps.version.outputs.tag }}"
+          git push --follow-tags origin "HEAD:${{ github.ref_name }}"
 
       # No --provenance flag and no token needed: under trusted publishing,
       # npm authenticates via OIDC and attaches provenance automatically.
