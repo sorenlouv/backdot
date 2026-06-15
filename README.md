@@ -80,7 +80,6 @@ Add a `~/.backdot/post-restore` shell script which will be executed after `backd
 ## Development
 
 ```bash
-cd cli
 npm install
 npm run build
 npm start

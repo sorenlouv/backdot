@@ -7,15 +7,14 @@
 
 ## CLI
 
-The CLI is a standalone Node.js application in `cli/`.
+The CLI is a standalone Node.js application.
 
 ```bash
-cd cli
 npm ci
 npm run build
 ```
 
-This compiles TypeScript to `cli/dist/`. Run the CLI directly with:
+This compiles TypeScript to `dist/`. Run the CLI directly with:
 
 ```bash
 node dist/cli.js --help

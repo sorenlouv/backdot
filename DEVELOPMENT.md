@@ -7,11 +7,9 @@
 
 ## Getting Started
 
-The npm package lives in `cli/`, so run all npm commands from there.
-
 ```bash
 git clone https://github.com/sorenlouv/backdot.git
-cd backdot/cli
+cd backdot
 npm install
 npm run build
 ```

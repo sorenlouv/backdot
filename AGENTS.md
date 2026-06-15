@@ -8,8 +8,8 @@ Fast, simple, beautiful. When in doubt, leave it out.
 
 ## Architecture
 
-- **Single CLI package.** The Node.js CLI (`cli/src/`) is the entire product — backup, restore, scheduling, visibility checks, encryption, etc. backdot is a command-line tool with no graphical UI.
-- **Paths are defined once.** Every user-facing filesystem path (`~/.backdot/config.json`, `~/.backdot/encryption.key`, log paths, staging dirs, etc.) is defined as a named constant in `cli/src/paths.ts`. Other modules import from there — never construct paths with `os.homedir()` + `".backdot"` inline.
+- **Single CLI package.** The Node.js CLI (`src/`) is the entire product — backup, restore, scheduling, visibility checks, encryption, etc. backdot is a command-line tool with no graphical UI.
+- **Paths are defined once.** Every user-facing filesystem path (`~/.backdot/config.json`, `~/.backdot/encryption.key`, log paths, staging dirs, etc.) is defined as a named constant in `src/paths.ts`. Other modules import from there — never construct paths with `os.homedir()` + `".backdot"` inline.
 
 ## Code style
 
@@ -30,7 +30,6 @@ Fast, simple, beautiful. When in doubt, leave it out.
 ## Testing
 
 ```bash
-cd cli
 npm test              # unit tests (vitest)
 npm run test:e2e      # build + e2e
 ```
@@ -38,5 +37,5 @@ npm run test:e2e      # build + e2e
 Override `HOME` to test without touching real config:
 
 ```bash
-HOME=$(mktemp -d) node cli/dist/cli.js init
+HOME=$(mktemp -d) node dist/cli.js init
 ```
