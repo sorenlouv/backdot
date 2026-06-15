@@ -20,6 +20,12 @@ on:
 permissions:
   contents: read
 
+# Husky git hooks are a local-dev convenience and must not run in CI: otherwise
+# the release job's "npm version" commit triggers pre-commit, and its "git push"
+# triggers pre-push (which runs the whole test suite and fails the push).
+env:
+  HUSKY: "0"
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -81,12 +87,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: "https://registry.npmjs.org" # pins the registry for the OIDC token exchange
           cache: npm
           cache-dependency-path: cli/package-lock.json
 
-      # Node 22 bundles npm 10.x, but OIDC trusted publishing needs npm >= 11.5.1.
+      # OIDC trusted publishing needs npm >= 11.5.1, which is newer than the npm
+      # bundled with Node, so upgrade before publishing.
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@latest
 
