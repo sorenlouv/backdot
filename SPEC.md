@@ -12,26 +12,33 @@ The target user is an individual developer who wants to back up personal config 
 
 **Config file** (`~/.backdot/config.json`) has four fields:
 
-| Field        | Required | Description                                      |
-| ------------ | -------- | ------------------------------------------------ |
-| `repository` | yes      | Git remote URL (SSH or HTTPS)                    |
-| `machine`    | yes      | Name for this machine (e.g. `my-work-laptop`)    |
-| `paths`      | yes      | Array of glob patterns matching files to back up |
-| `encrypt`    | no       | `true` to encrypt files before pushing           |
+| Field        | Required | Description                                                                                      |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------ |
+| `repository` | yes      | HTTPS github.com URL (`https://github.com/<owner>/<repo>`); SSH and non-GitHub URLs are rejected |
+| `machine`    | yes      | Name for this machine (e.g. `my-work-laptop`)                                                    |
+| `paths`      | yes      | Array of glob patterns matching files to back up                                                 |
+| `encrypt`    | no       | `true` to encrypt files before pushing                                                           |
 
 **Machine isolation.** Each machine's files are stored under a `<machine>/` directory in the repo. Two machines sharing the same repo must never interfere with each other. Breaking this isolation would be a critical bug.
 
 **Config always backed up.** `~/.backdot/config.json` is automatically included in every backup so that `restore` works on a blank machine with zero prior setup.
 
+### Authentication
+
+Backdot is GitHub-only and authenticates over HTTPS with a GitHub Personal Access Token (PAT). SSH is not used.
+
+- The token is read from `~/.backdot/github.token` (which must have `0600` permissions, i.e. no group/other access), or from the `BACKDOT_GITHUB_TOKEN` environment variable. The token file is never included in backups.
+- A single authenticated call, `GET https://api.github.com/repos/:owner/:repo`, validates the token, confirms repo access, and reports visibility via the response `private` boolean.
+
 ## Commands
 
 ### `init`
 
-Creates `~/.backdot/config.json` with sensible defaults. Never overwrites an existing config. Shows deep links to create a private repo on GitHub, GitLab, and Bitbucket, and prints next-step commands.
+Creates `~/.backdot/config.json` with sensible defaults. Never overwrites an existing config. Shows a deep link to create a private repo on GitHub and guides creating a GitHub Personal Access Token, then prints next-step commands.
 
 ### `backup`
 
-Resolves files from config, refuses if the repo is public, syncs with the remote, optionally encrypts, and pushes changes. Shows a clickable commit URL on success (GitHub, GitLab, or Bitbucket). If the configured paths match no files, it warns and backs up the config alone rather than bailing out.
+Resolves files from config, refuses if the repo is public, syncs with the remote, optionally encrypts, and pushes changes. Shows a clickable commit URL on success (GitHub). If the configured paths match no files, it warns and backs up the config alone rather than bailing out.
 
 Every run produces a commit, even when nothing changed since the last backup (or no user files matched) — in that case an **empty commit** with message `backup: no changes` is created and pushed. This records that the backup ran; a missing commit would be indistinguishable from the backup process never having run.
 
@@ -60,7 +67,7 @@ Lists recent backups, lets the user pick one, then restores from that commit.
 
 ### `status`
 
-Shows: schedule state, repo URL, machine name, encryption status, repo visibility (public/private/unknown), and a per-file comparison against the remote (backed up / modified since last backup / not yet backed up).
+Shows: schedule state, repo URL, machine name, encryption status, repo visibility (public/private), and a per-file comparison against the remote (backed up / modified since last backup / not yet backed up).
 
 Useful before the first backup: with no config it nudges the user to run `init`; with a config but nothing backed up yet it previews every resolved file as "not yet backed up" instead of erroring.
 
@@ -105,9 +112,9 @@ Shows help. Nudges toward `init` if no config file exists.
 
 ## Repository Visibility Check
 
-- Before each backup, the repo is checked for public accessibility. Backup is refused if the repo is public, to prevent accidental exposure of sensitive files.
-- Visibility detection works for GitHub, GitLab, and Bitbucket. For other hosts, visibility is reported as "unknown" and backup is allowed.
-- `status` shows the repo's visibility.
+- Before each backup, backdot fetches `GET /repos/:owner/:repo` from the GitHub API using the PAT and refuses the backup unless the repo is private (the response `private` boolean is `true`). This prevents accidental exposure of sensitive files.
+- The check fails closed: if visibility cannot be determined (auth failure, repo not found, network error, or any non-`true` `private` value), the backup is refused.
+- `status` shows the repo's visibility (public/private).
 
 ## File Layout in the Backup Repo
 
@@ -150,7 +157,7 @@ These behaviors are intentional and must be preserved:
 - **Config always included in backup.** This enables self-bootstrapping restore on a blank machine.
 - **Non-destructive restore.** New files are auto-selected; existing files require explicit opt-in. `--no-overwrite` restores only new files and never overwrites existing ones.
 - **Key file never backed up.** The encryption password file is always excluded from backups.
-- **Public repo backup refused.** Backup is blocked when the repo is publicly accessible.
+- **Public repo backup refused.** Backup is blocked unless the GitHub API reports the repo as private (`private === true`).
 
 ## Explicitly Removed Features
 
@@ -158,10 +165,12 @@ These features existed in earlier versions and were intentionally removed. Do no
 
 - **Automatic gitignored file discovery.** An earlier version had a `gitignored` config option that auto-discovered gitignored files. It was removed as too implicit and noisy. Users should list files explicitly in `paths` instead.
 - **Nested config schema.** An earlier version used `files.gitignored` / `files.match`. This was flattened to top-level `paths` for simplicity.
+- **SSH transport / git@ URLs.** Backdot speaks HTTPS to GitHub only. `git@...` and `ssh://` remotes are rejected.
+- **Multi-provider support (GitLab, Bitbucket).** Earlier versions supported other Git hosts. Backdot is now GitHub-only.
 
 ## Supported Git Providers
 
-GitHub, GitLab, and Bitbucket. Any provider that supports standard Git over HTTPS or SSH should work, but these three are the optimization targets.
+GitHub only; HTTPS + PAT; SSH and other providers are not supported.
 
 ## Platform
 

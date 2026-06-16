@@ -8,7 +8,7 @@ import { cleanStaging, copyToStaging, writeRepoReadme, machineDir } from "../sta
 import { gitPull, gitCommitAndPush } from "../git.js";
 import { logger } from "../log.js";
 import { pluralize } from "../utils.js";
-import { checkRepoVisibility } from "../repoVisibility.js";
+import { parseGitHubRepoUrl, fetchRepoAccess, resolveGitHubToken } from "../github.js";
 import { confirm } from "@inquirer/prompts";
 import { decrypt, deriveKey, type DerivedKey } from "../crypto/encryption.js";
 import {
@@ -56,26 +56,23 @@ export async function backup(): Promise<void> {
     derivedKey = deriveKey(password);
   }
 
-  const spinner = ora("Checking repository visibility").start();
+  const token = resolveGitHubToken();
+  const repo = parseGitHubRepoUrl(config.repository);
+  if (!repo) {
+    // The config schema guarantees a valid github.com URL, so this is unreachable
+    // in practice — kept as a defensive guard.
+    throw new Error(`Invalid repository URL: ${config.repository}`);
+  }
+
+  const spinner = ora("Verifying GitHub access").start();
   try {
-    const visibility = await checkRepoVisibility(config.repository);
-    if (visibility === "public") {
+    const { isPrivate } = await fetchRepoAccess(repo, token);
+    if (!isPrivate) {
       spinner.fail("Backup refused — repository is public");
       throw new Error(
         `Repository "${config.repository}" is publicly accessible.\n` +
           "Backing up to a public repo would expose sensitive files.\n" +
           "Make the repository private, then try again.",
-      );
-    }
-
-    if (visibility === "unverifiable" && !process.env.BACKDOT_ALLOW_UNVERIFIED_VISIBILITY) {
-      spinner.fail("Backup refused — could not verify repository visibility");
-      throw new Error(
-        `Could not verify whether "${config.repository}" is private — the anonymous ` +
-          "visibility check failed (network error, timeout, or blocked HTTPS access).\n" +
-          "Backup is refused so files are never pushed to a repository that might be public.\n" +
-          "Confirm the repository is private and retry. If HTTPS is blocked in your " +
-          "environment, set BACKDOT_ALLOW_UNVERIFIED_VISIBILITY=1 to override.",
       );
     }
 
@@ -99,7 +96,7 @@ export async function backup(): Promise<void> {
     }
 
     spinner.text = "Syncing with remote";
-    await gitPull(config.repository);
+    await gitPull(config.repository, token);
 
     if (derivedKey) {
       const existingEncryptedFile = findEncryptedFile(machineDir(config.machine));
@@ -136,7 +133,7 @@ export async function backup(): Promise<void> {
     writeRepoReadme(config.repository, config.encrypt);
 
     spinner.text = "Pushing to remote";
-    const result = await gitCommitAndPush();
+    const result = await gitCommitAndPush(token);
 
     const successMsg = result.commitUrl
       ? `Backup complete → ${result.commitUrl}`

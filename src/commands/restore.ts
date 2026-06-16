@@ -7,6 +7,7 @@ import chalk from "chalk";
 import { checkbox, select, Separator } from "@inquirer/prompts";
 import { loadConfig } from "../config.js";
 import { gitPull } from "../git.js";
+import { resolveGitHubToken, isGitHubRepoUrl } from "../github.js";
 import {
   STAGING_DIR,
   machineDir,
@@ -46,7 +47,8 @@ function formatMachineList(machines: string[]): string {
 }
 
 async function resolveRepoAndMachine(
-  repoUrl?: string,
+  repoUrl: string | undefined,
+  token: string,
   commit?: string,
   machineOverride?: string,
 ): Promise<{ repository: string; machine: string }> {
@@ -59,7 +61,7 @@ async function resolveRepoAndMachine(
 
   const spinner = ora("Cloning backup repository").start();
   try {
-    await gitPull(repoUrl, commit);
+    await gitPull(repoUrl, token, commit);
   } catch (err) {
     spinner.fail("Failed to clone backup repository");
     throw err;
@@ -375,14 +377,26 @@ export async function restore({
 } = {}): Promise<void> {
   logger.info("Starting restore");
 
-  const { repository, machine } = await resolveRepoAndMachine(repoUrl, commit, machineOverride);
+  if (repoUrl && !isGitHubRepoUrl(repoUrl)) {
+    throw new Error(
+      `restore URL must be an HTTPS github.com URL (https://github.com/<owner>/<repo>): ${repoUrl}`,
+    );
+  }
+  const token = resolveGitHubToken();
+
+  const { repository, machine } = await resolveRepoAndMachine(
+    repoUrl,
+    token,
+    commit,
+    machineOverride,
+  );
 
   const spinner = ora("Fetching latest backup").start();
   const machineStagingDir = machineDir(machine);
 
   try {
     if (!repoUrl) {
-      await gitPull(repository, commit);
+      await gitPull(repository, token, commit);
     }
   } catch (err) {
     spinner.fail("Failed to fetch latest backup");

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { spawnSync, execSync, execFile } from "node:child_process";
+import { spawnSync, execSync, execFile, spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +8,53 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const CLI_PATH = path.resolve(import.meta.dirname, "../dist/cli.js");
+
+// backdot is GitHub-only over HTTPS now, so config.repository must be a
+// github.com URL. To keep these tests offline we (1) point the GitHub REST
+// check at a local stub via BACKDOT_GITHUB_API, and (2) rewrite this URL to a
+// local bare repo per-HOME with git's `insteadOf`. The CLI never knows the
+// difference; verification clones use the local path directly.
+const GH_URL = "https://github.com/backdot-test/backup.git";
+
+// The GitHub REST stub (GET /repos/:owner/:repo -> {private:true}) MUST run in
+// its OWN process: run() uses spawnSync, which blocks this worker's event loop,
+// so an in-process server could never answer the CLI's request (deadlock).
+const STUB_SERVER = `
+  const http = require('node:http');
+  const s = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ private: true }));
+  });
+  s.listen(0, '127.0.0.1', () => process.stdout.write('PORT:' + s.address().port + '\\n'));
+`;
+
+let apiProc: ChildProcess;
+let apiBaseUrl: string;
+
+beforeAll(async () => {
+  apiProc = spawn("node", ["-e", STUB_SERVER], { stdio: ["ignore", "pipe", "ignore"] });
+  const port = await new Promise<number>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("stub server did not start in time")), 10_000);
+    let buf = "";
+    apiProc.stdout!.on("data", (chunk: Buffer) => {
+      buf += chunk.toString();
+      const match = buf.match(/PORT:(\d+)/);
+      if (match) {
+        clearTimeout(timer);
+        resolve(Number(match[1]));
+      }
+    });
+    apiProc.once("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+  apiBaseUrl = `http://127.0.0.1:${port}`;
+});
+
+afterAll(() => {
+  apiProc.kill();
+});
 
 function run(args: string[], env: NodeJS.ProcessEnv): string {
   const result = spawnSync("node", [CLI_PATH, ...args], {
@@ -34,10 +81,23 @@ function cloneRemote(repo: string, dest: string): void {
   execSync(`git clone "${repo}" "${dest}"`, { stdio: "ignore" });
 }
 
+// Routes GH_URL to a local bare repo for git operations run with HOME=homeDir.
+function routeToLocal(homeDir: string, localRepo: string): void {
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(homeDir, ".gitconfig"),
+    `[url "${localRepo}"]\n\tinsteadOf = ${GH_URL}\n`,
+  );
+}
+
 function testEnv(homeDir: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
     HOME: homeDir,
+    // BACKDOT_GITHUB_API is honored only under NODE_ENV=test (a test-only seam).
+    NODE_ENV: "test",
+    BACKDOT_GITHUB_API: apiBaseUrl,
+    BACKDOT_GITHUB_TOKEN: "test-token",
     GIT_AUTHOR_NAME: "backdot-test",
     GIT_AUTHOR_EMAIL: "test@backdot.dev",
     GIT_COMMITTER_NAME: "backdot-test",
@@ -67,7 +127,7 @@ describe("backdot init", () => {
     expect(fs.existsSync(configPath)).toBe(true);
 
     const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    expect(config.repository).toBe("git@github.com:USERNAME/backdot-backup.git");
+    expect(config.repository).toBe("https://github.com/USERNAME/backdot-backup.git");
     expect(config.machine).toBe(
       process.platform === "darwin"
         ? execSync("scutil --get LocalHostName", { encoding: "utf-8" }).trim()
@@ -112,7 +172,7 @@ describe("backdot e2e", () => {
       path.join(tempDir, ".backdot", "config.json"),
       JSON.stringify(
         {
-          repository: remoteRepo,
+          repository: GH_URL,
           machine: "test-machine",
           paths: ["~/.zshrc", "~/.config/test/**"],
         },
@@ -120,6 +180,7 @@ describe("backdot e2e", () => {
         2,
       ),
     );
+    routeToLocal(tempDir, remoteRepo);
 
     env = testEnv(tempDir);
   });
@@ -159,8 +220,8 @@ describe("backdot e2e", () => {
   });
 
   it("backup with no changes still succeeds and records an empty commit", () => {
-    const countCommits = (): number => {
-      const verifyDir = path.join(tempDir, `verify-count-${Date.now()}`);
+    const countCommits = (suffix: string): number => {
+      const verifyDir = path.join(tempDir, `verify-count-${suffix}`);
       cloneRemote(remoteRepo, verifyDir);
       const count = Number(
         execSync("git rev-list --count HEAD", { cwd: verifyDir, encoding: "utf-8" }).trim(),
@@ -169,11 +230,11 @@ describe("backdot e2e", () => {
       return count;
     };
 
-    const before = countCommits();
+    const before = countCommits("before");
     const output = run(["backup"], env);
     expect(output).toContain("Backup complete");
 
-    const verifyDir = path.join(tempDir, `verify-empty-${Date.now()}`);
+    const verifyDir = path.join(tempDir, "verify-empty");
     cloneRemote(remoteRepo, verifyDir);
     const after = Number(
       execSync("git rev-list --count HEAD", { cwd: verifyDir, encoding: "utf-8" }).trim(),
@@ -219,7 +280,7 @@ describe("backdot e2e", () => {
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
     fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
-    const output = run(["restore", remoteRepo, "--no-overwrite"], env);
+    const output = run(["restore", GH_URL, "--no-overwrite"], env);
     expect(output).toContain("Restored");
 
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(MODIFIED_ZSHRC);
@@ -241,7 +302,7 @@ describe("backdot e2e", () => {
     fs.unlinkSync(path.join(tempDir, ".config", "test", "settings.json"));
     fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
-    const output = run(["restore", remoteRepo, "--commit", firstCommitSha, "--no-overwrite"], env);
+    const output = run(["restore", GH_URL, "--commit", firstCommitSha, "--no-overwrite"], env);
     expect(output).toContain("Restored");
 
     // The first commit had the original ZSHRC_CONTENT, not the MODIFIED_ZSHRC
@@ -270,7 +331,7 @@ describe("negation patterns", () => {
       path.join(tempDir, ".backdot", "config.json"),
       JSON.stringify(
         {
-          repository: remoteRepo,
+          repository: GH_URL,
           machine: "negate-machine",
           paths: ["~/.config/app/*", "!~/.config/app/secret.key", "!~/.config/app/cache.tmp"],
         },
@@ -278,6 +339,7 @@ describe("negation patterns", () => {
         2,
       ),
     );
+    routeToLocal(tempDir, remoteRepo);
 
     env = testEnv(tempDir);
   });
@@ -330,12 +392,9 @@ describe("concurrent multi-machine backup", () => {
       fs.writeFileSync(path.join(homeDir, m.file), m.content);
       fs.writeFileSync(
         path.join(homeDir, ".backdot", "config.json"),
-        JSON.stringify(
-          { repository: remoteRepo, machine: m.name, paths: [`~/${m.file}`] },
-          null,
-          2,
-        ),
+        JSON.stringify({ repository: GH_URL, machine: m.name, paths: [`~/${m.file}`] }, null, 2),
       );
+      routeToLocal(homeDir, remoteRepo);
     }
 
     // Seed the repo sequentially so all machines exist on the remote
@@ -397,7 +456,7 @@ describe("encrypted backup and restore", () => {
       path.join(tempDir, ".backdot", "config.json"),
       JSON.stringify(
         {
-          repository: remoteRepo,
+          repository: GH_URL,
           machine: "enc-machine",
           paths: ["~/.zshrc"],
           encrypt: true,
@@ -406,6 +465,7 @@ describe("encrypted backup and restore", () => {
         2,
       ),
     );
+    routeToLocal(tempDir, remoteRepo);
 
     env = {
       ...testEnv(tempDir),
@@ -444,7 +504,7 @@ describe("encrypted backup and restore", () => {
     fs.unlinkSync(path.join(tempDir, ".zshrc"));
     fs.unlinkSync(path.join(tempDir, ".backdot", "config.json"));
 
-    const output = run(["restore", remoteRepo, "--no-overwrite"], env);
+    const output = run(["restore", GH_URL, "--no-overwrite"], env);
     expect(output).toContain("Restored");
 
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(ZSHRC_CONTENT);
@@ -484,7 +544,7 @@ describe("files outside HOME round-trip", () => {
       path.join(homeDir, ".backdot", "config.json"),
       JSON.stringify(
         {
-          repository: remoteRepo,
+          repository: GH_URL,
           machine: "outside-machine",
           paths: [path.join(outsideDir, "system.conf")],
         },
@@ -492,6 +552,7 @@ describe("files outside HOME round-trip", () => {
         2,
       ),
     );
+    routeToLocal(homeDir, remoteRepo);
 
     env = testEnv(homeDir);
   });
@@ -513,7 +574,7 @@ describe("files outside HOME round-trip", () => {
     // Delete the original, then restore: it must come back at the same absolute
     // path, not somewhere under HOME.
     fs.rmSync(outsideDir, { recursive: true, force: true });
-    expect(run(["restore", remoteRepo, "--no-overwrite"], env)).toContain("Restored");
+    expect(run(["restore", GH_URL, "--no-overwrite"], env)).toContain("Restored");
 
     expect(fs.readFileSync(path.join(outsideDir, "system.conf"), "utf-8")).toBe(OUTSIDE_CONTENT);
   });
@@ -532,11 +593,12 @@ describe("backup with no matching files", () => {
       fs.writeFileSync(
         path.join(homeDir, ".backdot", "config.json"),
         JSON.stringify(
-          { repository: remoteRepo, machine: "lonely", paths: ["~/.does-not-exist"] },
+          { repository: GH_URL, machine: "lonely", paths: ["~/.does-not-exist"] },
           null,
           2,
         ),
       );
+      routeToLocal(homeDir, remoteRepo);
 
       const output = run(["backup"], testEnv(homeDir));
       // It does not bail out — it warns and completes.
@@ -582,8 +644,9 @@ describe("status before first backup", () => {
       fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
       fs.writeFileSync(
         path.join(homeDir, ".backdot", "config.json"),
-        JSON.stringify({ repository: remoteRepo, machine: "fresh", paths: ["~/.zshrc"] }, null, 2),
+        JSON.stringify({ repository: GH_URL, machine: "fresh", paths: ["~/.zshrc"] }, null, 2),
       );
+      routeToLocal(homeDir, remoteRepo);
 
       const output = run(["status"], testEnv(homeDir));
       expect(output).toContain("No backup yet");
@@ -614,6 +677,13 @@ describe("restore --machine", () => {
     throw new Error("expected the command to fail, but it succeeded");
   }
 
+  // A fresh, config-less HOME that can still reach the remote and the API stub.
+  function freshEnv(): { home: string; env: NodeJS.ProcessEnv } {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    routeToLocal(home, remoteRepo);
+    return { home, env: testEnv(home) };
+  }
+
   beforeAll(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-machineflag-"));
     remoteRepo = path.join(tempDir, "remote.git");
@@ -625,12 +695,9 @@ describe("restore --machine", () => {
       fs.writeFileSync(path.join(homeDir, m.file), m.content);
       fs.writeFileSync(
         path.join(homeDir, ".backdot", "config.json"),
-        JSON.stringify(
-          { repository: remoteRepo, machine: m.name, paths: [`~/${m.file}`] },
-          null,
-          2,
-        ),
+        JSON.stringify({ repository: GH_URL, machine: m.name, paths: [`~/${m.file}`] }, null, 2),
       );
+      routeToLocal(homeDir, remoteRepo);
       run(["backup"], testEnv(homeDir));
     }
   });
@@ -640,70 +707,64 @@ describe("restore --machine", () => {
   });
 
   it("restores the named machine into a config-less HOME", () => {
-    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    const { home, env } = freshEnv();
     try {
-      const output = run(
-        ["restore", remoteRepo, "--machine", "server", "--no-overwrite"],
-        testEnv(freshHome),
-      );
+      const output = run(["restore", GH_URL, "--machine", "server", "--no-overwrite"], env);
       expect(output).toContain("Restored");
-      expect(fs.readFileSync(path.join(freshHome, ".bashrc"), "utf-8")).toBe("# server\n");
-      expect(fs.existsSync(path.join(freshHome, ".zshrc"))).toBe(false);
+      expect(fs.readFileSync(path.join(home, ".bashrc"), "utf-8")).toBe("# server\n");
+      expect(fs.existsSync(path.join(home, ".zshrc"))).toBe(false);
     } finally {
-      fs.rmSync(freshHome, { recursive: true, force: true });
+      fs.rmSync(home, { recursive: true, force: true });
     }
   });
 
   it("errors and lists machines when --machine names an unknown machine", () => {
-    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    const { home, env } = freshEnv();
     try {
       const message = failureOutput(
-        ["restore", remoteRepo, "--machine", "nope", "--no-overwrite"],
-        testEnv(freshHome),
+        ["restore", GH_URL, "--machine", "nope", "--no-overwrite"],
+        env,
       );
       expect(message).toContain('No backup found for machine "nope"');
       expect(message).toContain("laptop");
       expect(message).toContain("server");
     } finally {
-      fs.rmSync(freshHome, { recursive: true, force: true });
+      fs.rmSync(home, { recursive: true, force: true });
     }
   });
 
   it("errors and lists machines when multiple exist, no --machine, and no TTY", () => {
-    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    const { home, env } = freshEnv();
     try {
-      const message = failureOutput(["restore", remoteRepo, "--no-overwrite"], testEnv(freshHome));
+      const message = failureOutput(["restore", GH_URL, "--no-overwrite"], env);
       expect(message).toContain("Multiple machines found");
       expect(message).toContain("--machine");
       expect(message).toContain("laptop");
       expect(message).toContain("server");
     } finally {
-      fs.rmSync(freshHome, { recursive: true, force: true });
+      fs.rmSync(home, { recursive: true, force: true });
     }
   });
 
   it("errors with a clear message when restore runs without --yes in a non-TTY", () => {
-    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    const { home, env } = freshEnv();
     try {
-      const message = failureOutput(
-        ["restore", remoteRepo, "--machine", "laptop"],
-        testEnv(freshHome),
-      );
+      const message = failureOutput(["restore", GH_URL, "--machine", "laptop"], env);
       expect(message).toContain("interactive");
       expect(message).toContain("--yes");
     } finally {
-      fs.rmSync(freshHome, { recursive: true, force: true });
+      fs.rmSync(home, { recursive: true, force: true });
     }
   });
 
   it("errors with a clear message when history runs in a non-TTY", () => {
-    const freshHome = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-fresh-"));
+    const { home, env } = freshEnv();
     try {
-      const message = failureOutput(["history", remoteRepo], testEnv(freshHome));
+      const message = failureOutput(["history", GH_URL], env);
       expect(message).toContain("interactive");
       expect(message).toContain("restore --commit");
     } finally {
-      fs.rmSync(freshHome, { recursive: true, force: true });
+      fs.rmSync(home, { recursive: true, force: true });
     }
   });
 });
@@ -711,7 +772,7 @@ describe("restore --machine", () => {
 describe("post-restore hook", () => {
   // Sets up a machine with a ~/.backdot/post-restore script, backs it up, then
   // wipes the home dir to simulate a fresh machine ready to restore.
-  function setupBackedUpMachine(hookScript: string): { homeDir: string; remoteRepo: string } {
+  function setupBackedUpMachine(hookScript: string): { homeDir: string } {
     const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-hook-"));
     const remoteRepo = path.join(homeDir, "remote.git");
     execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
@@ -721,23 +782,24 @@ describe("post-restore hook", () => {
     fs.writeFileSync(path.join(homeDir, ".backdot", "post-restore"), hookScript);
     fs.writeFileSync(
       path.join(homeDir, ".backdot", "config.json"),
-      JSON.stringify({ repository: remoteRepo, machine: "box", paths: ["~/.zshrc"] }, null, 2),
+      JSON.stringify({ repository: GH_URL, machine: "box", paths: ["~/.zshrc"] }, null, 2),
     );
+    routeToLocal(homeDir, remoteRepo);
 
     run(["backup"], testEnv(homeDir));
 
-    // Simulate a wiped machine: only the remote survives.
+    // Simulate a wiped machine: only the remote (and routing) survive.
     fs.rmSync(path.join(homeDir, ".zshrc"));
     fs.rmSync(path.join(homeDir, ".backdot"), { recursive: true });
 
-    return { homeDir, remoteRepo };
+    return { homeDir };
   }
 
   it("runs the restored hook after restoring", () => {
-    const { homeDir, remoteRepo } = setupBackedUpMachine('touch "$HOME/provisioned"\n');
+    const { homeDir } = setupBackedUpMachine('touch "$HOME/provisioned"\n');
     try {
       const output = run(
-        ["restore", remoteRepo, "--machine", "box", "--no-overwrite"],
+        ["restore", GH_URL, "--machine", "box", "--no-overwrite"],
         testEnv(homeDir),
       );
 
@@ -751,11 +813,11 @@ describe("post-restore hook", () => {
   });
 
   it("surfaces a failing hook as an error, with files already restored", () => {
-    const { homeDir, remoteRepo } = setupBackedUpMachine("exit 3\n");
+    const { homeDir } = setupBackedUpMachine("exit 3\n");
     try {
       let message = "";
       try {
-        run(["restore", remoteRepo, "--machine", "box", "--no-overwrite"], testEnv(homeDir));
+        run(["restore", GH_URL, "--machine", "box", "--no-overwrite"], testEnv(homeDir));
       } catch (err) {
         message = (err as Error).message;
       }
@@ -781,8 +843,9 @@ describe("user-authored files in the machine dir", () => {
       fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
       fs.writeFileSync(
         path.join(homeDir, ".backdot", "config.json"),
-        JSON.stringify({ repository: remoteRepo, machine: "box", paths: ["~/.zshrc"] }, null, 2),
+        JSON.stringify({ repository: GH_URL, machine: "box", paths: ["~/.zshrc"] }, null, 2),
       );
+      routeToLocal(homeDir, remoteRepo);
 
       run(["backup"], testEnv(homeDir));
 
@@ -812,7 +875,7 @@ describe("user-authored files in the machine dir", () => {
 
       // Restore treats the README as docs: the payload comes back, the README never does.
       fs.rmSync(path.join(homeDir, ".zshrc"));
-      run(["restore", remoteRepo, "--machine", "box", "--no-overwrite"], testEnv(homeDir));
+      run(["restore", GH_URL, "--machine", "box", "--no-overwrite"], testEnv(homeDir));
       expect(fs.existsSync(path.join(homeDir, ".zshrc"))).toBe(true);
       expect(fs.existsSync(path.join(homeDir, "README.md"))).toBe(false);
     } finally {
@@ -844,7 +907,7 @@ describe("restore --dry-run", () => {
       path.join(tempDir, ".backdot", "config.json"),
       JSON.stringify(
         {
-          repository: remoteRepo,
+          repository: GH_URL,
           machine: "dry-machine",
           paths: ["~/.zshrc", "~/.config/test/**"],
         },
@@ -852,6 +915,7 @@ describe("restore --dry-run", () => {
         2,
       ),
     );
+    routeToLocal(tempDir, remoteRepo);
     env = testEnv(tempDir);
 
     run(["backup"], env);
@@ -869,7 +933,7 @@ describe("restore --dry-run", () => {
 
     // No --no-overwrite, yet this must NOT throw the "interactive" error in a
     // non-TTY: dry-run returns before the picker.
-    const output = run(["restore", remoteRepo, "--dry-run"], env);
+    const output = run(["restore", GH_URL, "--dry-run"], env);
 
     expect(output).toContain("Dry run");
     expect(output).toContain("no files will be written");
@@ -890,7 +954,7 @@ describe("restore --dry-run", () => {
 
   it("reports existing files as left untouched with --no-overwrite", () => {
     // .zshrc is still the local edit from the previous test, so it is "existing".
-    const output = run(["restore", remoteRepo, "--dry-run", "--no-overwrite"], env);
+    const output = run(["restore", GH_URL, "--dry-run", "--no-overwrite"], env);
     expect(output).toContain("left untouched");
     expect(output).toContain("will be created");
     expect(fs.readFileSync(path.join(tempDir, ".zshrc"), "utf-8")).toBe(LOCAL_EDIT);
@@ -917,11 +981,12 @@ describe("restore --dry-run with encryption", () => {
     fs.writeFileSync(
       path.join(tempDir, ".backdot", "config.json"),
       JSON.stringify(
-        { repository: remoteRepo, machine: "enc-dry", paths: ["~/.zshrc"], encrypt: true },
+        { repository: GH_URL, machine: "enc-dry", paths: ["~/.zshrc"], encrypt: true },
         null,
         2,
       ),
     );
+    routeToLocal(tempDir, remoteRepo);
     env = { ...testEnv(tempDir), BACKDOT_PASSWORD: PASSWORD };
 
     run(["backup"], env);
@@ -934,7 +999,7 @@ describe("restore --dry-run with encryption", () => {
   it("decrypts the backup to diff an encrypted file, writing nothing", () => {
     fs.writeFileSync(path.join(tempDir, ".zshrc"), LOCAL_EDIT);
 
-    const output = run(["restore", remoteRepo, "--dry-run"], env);
+    const output = run(["restore", GH_URL, "--dry-run"], env);
 
     expect(output).toContain("overwrites your local copy");
     // The diff is computed from decrypted backup content, not ciphertext.

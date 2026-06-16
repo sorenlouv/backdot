@@ -29,6 +29,11 @@ const GIT_ENV = {
   GIT_COMMITTER_EMAIL: "test@backdot.dev",
 };
 
+// gitPull/gitCommitAndPush now require a token. For local file:// transport the
+// injected http.extraHeader auth config is harmlessly ignored, so any
+// non-empty value works for these real-git-against-local-bare-repo tests.
+const TOKEN = "test-token";
+
 function createBareRepo(dir: string): void {
   execSync(`git init --bare "${dir}"`, { stdio: "ignore" });
 }
@@ -115,7 +120,7 @@ describe("gitPull — clone path (integration)", () => {
     const remote = path.join(tempDir, "empty.git");
     createBareRepo(remote);
 
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     expect(fs.existsSync(path.join(STAGING, ".git"))).toBe(true);
     const git = simpleGit(STAGING);
@@ -128,7 +133,7 @@ describe("gitPull — clone path (integration)", () => {
     createBareRepo(remote);
     addCommitToRemote(remote, "hello.txt", "world\n");
 
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     expect(fs.readFileSync(path.join(STAGING, "hello.txt"), "utf-8")).toBe("world\n");
   });
@@ -136,8 +141,8 @@ describe("gitPull — clone path (integration)", () => {
   it("throws a friendly error for a non-existent repo", async () => {
     const fakePath = path.join(tempDir, "does-not-exist.git");
 
-    await expect(gitPull(fakePath)).rejects.toThrow(
-      `Repository "${fakePath}" not found. Check the URL and that you have access.`,
+    await expect(gitPull(fakePath, TOKEN)).rejects.toThrow(
+      /not found, or your GitHub token can't access it/,
     );
   });
 });
@@ -162,11 +167,11 @@ describe("gitPull — fetch path (integration)", () => {
   });
 
   it("fetches new commits from the remote", async () => {
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
     expect(fs.readFileSync(path.join(STAGING, "initial.txt"), "utf-8")).toBe("v1\n");
 
     addCommitToRemote(remote, "second.txt", "v2\n");
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     expect(fs.readFileSync(path.join(STAGING, "second.txt"), "utf-8")).toBe("v2\n");
   });
@@ -178,7 +183,7 @@ describe("gitPull — fetch path (integration)", () => {
     addCommitToRemote(remote2, "file2.txt", "second\n");
 
     STAGING = path.join(tempDir, `staging-specific-${Date.now()}`);
-    await gitPull(remote2, sha1);
+    await gitPull(remote2, TOKEN, sha1);
 
     expect(fs.existsSync(path.join(STAGING, "file1.txt"))).toBe(true);
     expect(fs.existsSync(path.join(STAGING, "file2.txt"))).toBe(false);
@@ -193,21 +198,21 @@ describe("gitPull — fetch path (integration)", () => {
     addCommitToRemote(remoteB, "from-b.txt", "B\n");
 
     STAGING = path.join(tempDir, `staging-stale-${Date.now()}`);
-    await gitPull(remoteA);
+    await gitPull(remoteA, TOKEN);
     expect(fs.existsSync(path.join(STAGING, "from-a.txt"))).toBe(true);
 
-    await gitPull(remoteB);
+    await gitPull(remoteB, TOKEN);
     expect(fs.readFileSync(path.join(STAGING, "from-b.txt"), "utf-8")).toBe("B\n");
     expect(fs.existsSync(path.join(STAGING, "from-a.txt"))).toBe(false);
   });
 
   it("throws a friendly error when fetching from a non-existent remote", async () => {
     STAGING = path.join(tempDir, `staging-fetcherr-${Date.now()}`);
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     const fakePath = path.join(tempDir, "gone.git");
-    await expect(gitPull(fakePath)).rejects.toThrow(
-      `Repository "${fakePath}" not found. Check the URL and that you have access.`,
+    await expect(gitPull(fakePath, TOKEN)).rejects.toThrow(
+      /not found, or your GitHub token can't access it/,
     );
   });
 });
@@ -230,8 +235,8 @@ describe("friendlyGitError patterns (integration)", () => {
   // Pattern: "does not exist" (clone a path that doesn't exist at all)
   it("translates 'does not exist' on clone", async () => {
     const fakePath = path.join(tempDir, "no-such-dir.git");
-    await expect(gitPull(fakePath)).rejects.toThrow(
-      `Repository "${fakePath}" not found. Check the URL and that you have access.`,
+    await expect(gitPull(fakePath, TOKEN)).rejects.toThrow(
+      /not found, or your GitHub token can't access it/,
     );
   });
 
@@ -240,20 +245,20 @@ describe("friendlyGitError patterns (integration)", () => {
     const remote = path.join(tempDir, "real-remote.git");
     createBareRepo(remote);
     addCommitToRemote(remote, "seed.txt", "x\n");
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     const notGitDir = path.join(tempDir, "plain-dir");
     fs.mkdirSync(notGitDir, { recursive: true });
 
-    await expect(gitPull(notGitDir)).rejects.toThrow(
-      `Repository "${notGitDir}" not found. Check the URL and that you have access.`,
+    await expect(gitPull(notGitDir, TOKEN)).rejects.toThrow(
+      /not found, or your GitHub token can't access it/,
     );
   });
 
   // Pattern: "could not resolve host"
   it("translates 'could not resolve host'", async () => {
     const badUrl = "https://this-host-does-not-exist.invalid/repo.git";
-    await expect(gitPull(badUrl)).rejects.toThrow(
+    await expect(gitPull(badUrl, TOKEN)).rejects.toThrow(
       "Could not connect to remote host. Check your internet connection.",
     );
   });
@@ -261,7 +266,7 @@ describe("friendlyGitError patterns (integration)", () => {
   // Pattern: "connection refused"
   it("translates 'connection refused'", async () => {
     const badUrl = "git://127.0.0.1:39517/repo.git";
-    await expect(gitPull(badUrl)).rejects.toThrow(
+    await expect(gitPull(badUrl, TOKEN)).rejects.toThrow(
       "Could not connect to remote host. Check your internet connection.",
     );
   });
@@ -291,7 +296,7 @@ describe("gitLog (integration)", () => {
     const sha2 = addCommitToRemote(remote, "b.txt", "2\n");
 
     STAGING = path.join(tempDir, `staging-log-${Date.now()}`);
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     const entries = await gitLog();
     expect(entries).toHaveLength(2);
@@ -308,7 +313,7 @@ describe("gitLog (integration)", () => {
     addCommitToRemote(remote, "c.txt", "3\n");
 
     STAGING = path.join(tempDir, `staging-loglim-${Date.now()}`);
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     const entries = await gitLog(2);
     expect(entries).toHaveLength(2);
@@ -332,11 +337,11 @@ describe("gitCommitAndPush (integration)", () => {
     addCommitToRemote(remote, "seed.txt", "seed\n");
 
     STAGING = path.join(tempDir, `staging-clean-${Date.now()}`);
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     const headBefore = (await simpleGit(STAGING).revparse(["HEAD"])).trim();
 
-    const result = await gitCommitAndPush();
+    const result = await gitCommitAndPush(TOKEN);
     expect(result).not.toBeNull();
 
     // A new commit exists locally...
@@ -368,10 +373,10 @@ describe("gitCommitAndPush (integration)", () => {
     addCommitToRemote(remote, "seed.txt", "seed\n");
 
     STAGING = path.join(tempDir, `staging-push-${Date.now()}`);
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     fs.writeFileSync(path.join(STAGING, "new-file.txt"), "hello\n");
-    const result = await gitCommitAndPush();
+    const result = await gitCommitAndPush(TOKEN);
     expect(result).not.toBeNull();
 
     const verifyDir = path.join(tempDir, `verify-${Date.now()}`);
@@ -386,10 +391,10 @@ describe("gitCommitAndPush (integration)", () => {
     addCommitToRemote(remote, "seed.txt", "seed\n");
 
     STAGING = path.join(tempDir, `staging-msg-${Date.now()}`);
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     fs.writeFileSync(path.join(STAGING, "added.txt"), "new\n");
-    await gitCommitAndPush();
+    await gitCommitAndPush(TOKEN);
 
     const git = simpleGit(STAGING);
     const log = await git.log({ maxCount: 1 });
@@ -402,7 +407,7 @@ describe("gitCommitAndPush (integration)", () => {
     addCommitToRemote(remote, "seed.txt", "seed\n");
 
     STAGING = path.join(tempDir, `staging-pusherr-${Date.now()}`);
-    await gitPull(remote);
+    await gitPull(remote, TOKEN);
 
     const git = simpleGit(STAGING);
     const fakePath = path.join(tempDir, "gone-remote.git");
@@ -410,8 +415,8 @@ describe("gitCommitAndPush (integration)", () => {
 
     fs.writeFileSync(path.join(STAGING, "will-fail.txt"), "x\n");
 
-    await expect(gitCommitAndPush()).rejects.toThrow(
-      `Repository "${fakePath}" not found. Check the URL and that you have access.`,
+    await expect(gitCommitAndPush(TOKEN)).rejects.toThrow(
+      /not found, or your GitHub token can't access it/,
     );
   });
 });

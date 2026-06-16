@@ -4,7 +4,7 @@ import pRetry from "p-retry";
 import { simpleGit, type SimpleGit, CleanOptions } from "simple-git";
 import { logger } from "./log.js";
 import { STAGING_DIR, STAGING_GIT_DIR } from "./paths.js";
-import { getCommitUrl } from "./commitUrl.js";
+import { commitUrl, gitAuthConfig } from "./github.js";
 import { errorMessage, pluralize, uniq } from "./utils.js";
 
 interface FileChangeSummary {
@@ -77,6 +77,16 @@ export async function getCurrentBranch(git: SimpleGit): Promise<string> {
   return (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
 }
 
+/**
+ * A simple-git instance that authenticates HTTPS requests to github.com with
+ * the PAT via `-c http.extraHeader`. Omit `baseDir` for the initial clone
+ * (which runs in the current working directory).
+ */
+function authedGit(token: string, baseDir?: string): SimpleGit {
+  const options = { config: gitAuthConfig(token) };
+  return baseDir ? simpleGit(baseDir, options) : simpleGit(options);
+}
+
 export function friendlyGitError(rawErrorMessage: string, repository: string): string {
   const normalizedMessage = rawErrorMessage.toLowerCase();
   if (
@@ -84,13 +94,16 @@ export function friendlyGitError(rawErrorMessage: string, repository: string): s
     normalizedMessage.includes("does not exist") ||
     normalizedMessage.includes("does not appear to be a git repository")
   ) {
-    return `Repository "${repository}" not found. Check the URL and that you have access.`;
+    return (
+      `Repository "${repository}" not found, or your GitHub token can't access it.\n` +
+      "  Check the URL, and that the token has access to this repository."
+    );
   }
   if (
     normalizedMessage.includes("authentication failed") ||
     normalizedMessage.includes("could not read username")
   ) {
-    return `Authentication failed for "${repository}". Check your credentials or SSH key.`;
+    return `Authentication failed for "${repository}". Check your GitHub token.`;
   }
   if (
     normalizedMessage.includes("could not resolve host") ||
@@ -107,10 +120,10 @@ export function gitError(err: unknown, repository: string): Error {
   return new Error(friendlyGitError(raw, repository), { cause: err });
 }
 
-export async function gitPull(repository: string, commit?: string): Promise<void> {
+export async function gitPull(repository: string, token: string, commit?: string): Promise<void> {
   try {
     if (fs.existsSync(STAGING_GIT_DIR)) {
-      const git = simpleGit(STAGING_DIR);
+      const git = authedGit(token, STAGING_DIR);
       await ensureRemoteUrl(repository);
       await git.fetch("origin");
       const resetTarget = commit ?? `origin/${await getCurrentBranch(git)}`;
@@ -118,18 +131,18 @@ export async function gitPull(repository: string, commit?: string): Promise<void
       await git.clean(CleanOptions.FORCE, ["-d"]);
     } else {
       try {
-        await simpleGit().clone(repository, STAGING_DIR);
+        await authedGit(token).clone(repository, STAGING_DIR);
       } catch (err) {
         if (!errorMessage(err).includes("empty repository")) {
           throw err;
         }
         fs.mkdirSync(STAGING_DIR, { recursive: true });
-        const git = simpleGit(STAGING_DIR);
+        const git = authedGit(token, STAGING_DIR);
         await git.init();
         await git.addRemote("origin", repository);
       }
       if (commit) {
-        const git = simpleGit(STAGING_DIR);
+        const git = authedGit(token, STAGING_DIR);
         await git.reset(["--hard", commit]);
         await git.clean(CleanOptions.FORCE, ["-d"]);
       }
@@ -152,8 +165,8 @@ export async function gitLog(
   }));
 }
 
-export async function gitCommitAndPush(): Promise<{ commitUrl: string | null }> {
-  const git = simpleGit(STAGING_DIR);
+export async function gitCommitAndPush(token: string): Promise<{ commitUrl: string | null }> {
+  const git = authedGit(token, STAGING_DIR);
 
   await git.add(".");
 
@@ -194,6 +207,5 @@ export async function gitCommitAndPush(): Promise<{ commitUrl: string | null }> 
   logger.info(`Committed and pushed: ${message}`);
 
   const commitHash = (await git.revparse(["HEAD"])).trim();
-  const commitUrl = getCommitUrl(remoteUrl, commitHash);
-  return { commitUrl };
+  return { commitUrl: commitUrl(remoteUrl, commitHash) };
 }

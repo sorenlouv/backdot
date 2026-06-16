@@ -66,6 +66,7 @@ import {
   STAGING_DIR,
   machineDir,
 } from "./staging.js";
+import { TOKEN_FILE_PATH } from "./paths.js";
 
 const HOME = os.homedir();
 const MACHINE = "sorens-work-laptop";
@@ -214,7 +215,12 @@ describe("compareFiles", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
 
-    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
+    const result = await compareFiles({
+      files,
+      machine: MACHINE,
+      repository: REPO,
+      token: "test-token",
+    });
 
     expect(result.remoteIsEmpty).toBe(true);
     expect(result.notBackedUp).toEqual(files);
@@ -222,7 +228,12 @@ describe("compareFiles", () => {
   });
 
   it("returns empty result for empty file list", async () => {
-    const result = await compareFiles({ files: [], machine: MACHINE, repository: REPO });
+    const result = await compareFiles({
+      files: [],
+      machine: MACHINE,
+      repository: REPO,
+      token: "test-token",
+    });
 
     expect(result.notBackedUp).toEqual([]);
     expect(result.backedUp).toEqual([]);
@@ -246,7 +257,12 @@ describe("compareFiles", () => {
     });
 
     const files = [`${HOME}/.zshrc`, `${HOME}/.npmrc`];
-    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
+    const result = await compareFiles({
+      files,
+      machine: MACHINE,
+      repository: REPO,
+      token: "test-token",
+    });
 
     expect(result.backedUp).toEqual([`${HOME}/.zshrc`]);
     expect(result.modified).toEqual([`${HOME}/.npmrc`]);
@@ -267,7 +283,12 @@ describe("compareFiles", () => {
     });
 
     const files = [`${HOME}/.zshrc`];
-    const result = await compareFiles({ files, machine: MACHINE, repository: REPO });
+    const result = await compareFiles({
+      files,
+      machine: MACHINE,
+      repository: REPO,
+      token: "test-token",
+    });
 
     expect(result.remoteIsEmpty).toBe(true);
     expect(result.notBackedUp).toEqual([`${HOME}/.zshrc`]);
@@ -285,9 +306,9 @@ describe("compareFiles", () => {
     });
 
     const files = [`${HOME}/.zshrc`];
-    await expect(compareFiles({ files, machine: MACHINE, repository: REPO })).rejects.toThrow(
-      "fatal: not a tree object",
-    );
+    await expect(
+      compareFiles({ files, machine: MACHINE, repository: REPO, token: "test-token" }),
+    ).rejects.toThrow("fatal: not a tree object");
   });
 
   it("throws when revparse fails", async () => {
@@ -296,9 +317,9 @@ describe("compareFiles", () => {
     mockGit.revparse.mockRejectedValue(new Error("HEAD not found"));
 
     const files = [`${HOME}/.zshrc`];
-    await expect(compareFiles({ files, machine: MACHINE, repository: REPO })).rejects.toThrow(
-      "HEAD not found",
-    );
+    await expect(
+      compareFiles({ files, machine: MACHINE, repository: REPO, token: "test-token" }),
+    ).rejects.toThrow("HEAD not found");
   });
 
   it("throws a friendly error when fetch fails", async () => {
@@ -306,9 +327,9 @@ describe("compareFiles", () => {
     mockGit.fetch.mockRejectedValue(new Error("Could not resolve host"));
 
     const files = [`${HOME}/.zshrc`];
-    await expect(compareFiles({ files, machine: MACHINE, repository: REPO })).rejects.toThrow(
-      "Could not connect to remote host. Check your internet connection.",
-    );
+    await expect(
+      compareFiles({ files, machine: MACHINE, repository: REPO, token: "test-token" }),
+    ).rejects.toThrow("Could not connect to remote host. Check your internet connection.");
   });
 
   it("throws a friendly error for a not-found repository", async () => {
@@ -316,9 +337,9 @@ describe("compareFiles", () => {
     mockGit.fetch.mockRejectedValue(new Error("remote: Repository not found."));
 
     const files = [`${HOME}/.zshrc`];
-    await expect(compareFiles({ files, machine: MACHINE, repository: REPO })).rejects.toThrow(
-      `Repository "${REPO}" not found. Check the URL and that you have access.`,
-    );
+    await expect(
+      compareFiles({ files, machine: MACHINE, repository: REPO, token: "test-token" }),
+    ).rejects.toThrow(`Repository "${REPO}" not found, or your GitHub token can't access it.`);
   });
 });
 
@@ -357,6 +378,21 @@ describe("copyToStaging with encryption", () => {
     copyToStaging(files, MACHINE, mockDerivedKey);
 
     expect(mockEncrypt).toHaveBeenCalledTimes(1);
+  });
+
+  it("excludes the GitHub token file from backup", () => {
+    const files = [`${HOME}/.zshrc`, TOKEN_FILE_PATH];
+    copyToStaging(files, MACHINE);
+
+    expect(fs.copyFileSync).toHaveBeenCalledTimes(1);
+    expect(fs.copyFileSync).toHaveBeenCalledWith(
+      `${HOME}/.zshrc`,
+      getStagedPath(`${HOME}/.zshrc`, MACHINE),
+    );
+    expect(fs.copyFileSync).not.toHaveBeenCalledWith(
+      TOKEN_FILE_PATH,
+      getStagedPath(TOKEN_FILE_PATH, MACHINE),
+    );
   });
 });
 
