@@ -24,6 +24,7 @@ Fast, simple, beautiful. When in doubt, leave it out.
 ## Scope
 
 - **Git is the only backend.** Non-git backends: firm no.
+- **GitHub is the only provider; HTTPS + PAT only; no SSH.** Other hosts (GitLab/Bitbucket) and SSH (`git@`/`ssh://`) are rejected.
 - The 10 MB file-size limit has no strong justification — can be raised or removed.
 - Other features: consider if highly requested and/or simple to implement.
 

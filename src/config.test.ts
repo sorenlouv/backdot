@@ -82,7 +82,7 @@ describe("loadConfig", () => {
   it("throws when machine is missing", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
-      JSON.stringify({ repository: "git@github.com:test/repo.git", paths: ["~/.zshrc"] }),
+      JSON.stringify({ repository: "https://github.com/test/repo.git", paths: ["~/.zshrc"] }),
     );
     expect(() => loadConfig()).toThrow("Invalid config");
   });
@@ -91,7 +91,7 @@ describe("loadConfig", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
-        repository: "git@github.com:test/repo.git",
+        repository: "https://github.com/test/repo.git",
         machine: "",
         paths: ["~/.zshrc"],
       }),
@@ -102,7 +102,7 @@ describe("loadConfig", () => {
   it("throws when paths is missing", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
-      JSON.stringify({ repository: "git@github.com:test/repo.git", machine: "my-laptop" }),
+      JSON.stringify({ repository: "https://github.com/test/repo.git", machine: "my-laptop" }),
     );
     expect(() => loadConfig()).toThrow("Invalid config");
   });
@@ -111,7 +111,7 @@ describe("loadConfig", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
-        repository: "git@github.com:test/repo.git",
+        repository: "https://github.com/test/repo.git",
         machine: "my-laptop",
         paths: [],
       }),
@@ -123,13 +123,48 @@ describe("loadConfig", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
-        repository: "git@github.com:test/repo.git",
+        repository: "https://github.com/test/repo.git",
         machine: "my-laptop",
         paths: [""],
       }),
     );
     expect(() => loadConfig()).toThrow("Invalid config");
   });
+
+  it.each([
+    "git@github.com:test/repo.git",
+    "ssh://git@github.com/test/repo",
+    "https://gitlab.com/test/repo",
+    "https://bitbucket.org/test/repo",
+    "not-a-url",
+  ])("throws when repository is not an HTTPS github.com URL: %s", (repository) => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({
+        repository,
+        machine: "my-laptop",
+        paths: ["~/.zshrc"],
+      }),
+    );
+    expect(() => loadConfig()).toThrow("Invalid config");
+  });
+
+  it.each(["https://github.com/test/repo", "https://github.com/test/repo.git"])(
+    "accepts a valid HTTPS github.com repository URL: %s",
+    (repository) => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({
+          repository,
+          machine: "my-laptop",
+          paths: ["~/.zshrc"],
+        }),
+      );
+
+      const config = loadConfig();
+      expect(config.repository).toBe(repository);
+    },
+  );
 
   it("includes field path in validation error message", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
@@ -143,7 +178,7 @@ describe("loadConfig", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
-        repository: "git@github.com:test/repo.git",
+        repository: "https://github.com/test/repo.git",
         machine: "my-laptop",
         paths: ["~/.zshrc"],
       }),
@@ -157,14 +192,14 @@ describe("loadConfig", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
-        repository: "git@github.com:test/repo.git",
+        repository: "https://github.com/test/repo.git",
         machine: "my-laptop",
         paths: ["~/.zshrc", "~/.config/ghostty/**"],
       }),
     );
 
     const config = loadConfig();
-    expect(config.repository).toBe("git@github.com:test/repo.git");
+    expect(config.repository).toBe("https://github.com/test/repo.git");
     expect(config.machine).toBe("my-laptop");
     expect(config.paths).toEqual([`${HOME}/.zshrc`, `${HOME}/.config/ghostty/**`]);
   });
@@ -173,7 +208,7 @@ describe("loadConfig", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
-        repository: "git@github.com:test/repo.git",
+        repository: "https://github.com/test/repo.git",
         machine: "my-laptop",
         paths: ["~/.config/ghostty/**", "!~/.config/ghostty/crashes/**"],
       }),

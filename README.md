@@ -17,7 +17,7 @@ This creates `~/.backdot/config.json` with sensible defaults and walks you throu
 
 ```json
 {
-  "repository": "git@github.com:USERNAME/backdot-backup.git",
+  "repository": "https://github.com/USERNAME/backdot-backup.git",
   "machine": "my-work-laptop",
   "paths": ["~/.zshrc", "~/.oh-my-zsh/custom/*.zsh", "~/.ssh/config", "~/.npmrc"]
 }
@@ -34,6 +34,21 @@ or configure the backport process to run automatically (daily at 2am)
 ```bash
 backdot schedule
 ```
+
+The repository must be a private `github.com` HTTPS URL. SSH and non-GitHub hosts are not supported.
+
+## Authentication
+
+backdot connects over HTTPS using a GitHub fine-grained Personal Access Token (no SSH).
+
+1. Create a token at https://github.com/settings/personal-access-tokens with **Contents** read/write access to your backup repo.
+2. Save it to `~/.backdot/github.token` with owner-only permissions:
+
+```bash
+umask 077 && printf %s "<token>" > ~/.backdot/github.token
+```
+
+Alternatively, set the `BACKDOT_GITHUB_TOKEN` environment variable. The token file is created with `0600` permissions and is never backed up.
 
 ## Configuration
 
@@ -68,12 +83,12 @@ Add a `~/.backdot/post-restore` shell script which will be executed after `backd
 | `init`                         | Set up backdot for the first time              |
 | `backup`                       | Run a backup now                               |
 | `restore`                      | Restore latest backup from the configured repo |
-| `restore <url>`                | Restore from a specific repo URL               |
+| `restore <url>`                | Restore from a specific repo URL (`https://github.com/<owner>/<repo>`) |
 | `restore [url] --commit <sha>` | Restore from a specific backup commit          |
 | `restore [url] --machine <name>` | Restore a specific machine non-interactively |
 | `restore [url] --yes` (`-y`)   | Restore new files non-interactively (skips existing files) |
 | `restore [url] --dry-run`      | Preview what restore would change, without writing any files |
-| `history [url]`                | Browse and restore a previous backup           |
+| `history [url]`                | Browse and restore a previous backup (`url` must be `https://github.com/<owner>/<repo>`) |
 | `schedule`                     | Schedule automatic daily backup (Mac-only)     |
 | `unschedule`                   | Unschedule the daily backup                    |
 | `status`                       | Show schedule and resolved file list           |

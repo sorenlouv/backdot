@@ -1,57 +1,34 @@
 import { describe, it, expect } from "vitest";
-import { extractRepoPath } from "./utils.js";
+import { errorMessage, uniq, pluralize } from "./utils.js";
 
-describe("extractRepoPath", () => {
-  it("extracts from GitHub SSH URL", () => {
-    expect(extractRepoPath("git@github.com:user/repo.git")).toEqual({
-      host: "github.com",
-      repoPath: "user/repo",
-    });
+describe("errorMessage", () => {
+  it("returns the message from an Error", () => {
+    expect(errorMessage(new Error("boom"))).toBe("boom");
   });
 
-  it("extracts from GitHub HTTPS URL", () => {
-    expect(extractRepoPath("https://github.com/user/repo.git")).toEqual({
-      host: "github.com",
-      repoPath: "user/repo",
-    });
+  it("stringifies non-Error values", () => {
+    expect(errorMessage("plain string")).toBe("plain string");
+    expect(errorMessage(42)).toBe("42");
+  });
+});
+
+describe("uniq", () => {
+  it("removes duplicate values", () => {
+    expect(uniq([1, 1, 2, 3, 3, 3])).toEqual([1, 2, 3]);
   });
 
-  it("extracts from GitLab SSH URL", () => {
-    expect(extractRepoPath("git@gitlab.com:org/project.git")).toEqual({
-      host: "gitlab.com",
-      repoPath: "org/project",
-    });
+  it("returns an empty array unchanged", () => {
+    expect(uniq([])).toEqual([]);
+  });
+});
+
+describe("pluralize", () => {
+  it("does not add an 's' for a count of 1", () => {
+    expect(pluralize(1, "file")).toBe("1 file");
   });
 
-  it("extracts from Bitbucket HTTPS URL", () => {
-    expect(extractRepoPath("https://bitbucket.org/team/repo")).toEqual({
-      host: "bitbucket.org",
-      repoPath: "team/repo",
-    });
-  });
-
-  it("strips .git suffix", () => {
-    const result = extractRepoPath("git@github.com:user/repo.git");
-    expect(result?.repoPath).toBe("user/repo");
-  });
-
-  it("handles URLs without .git suffix", () => {
-    const result = extractRepoPath("git@github.com:user/repo");
-    expect(result?.repoPath).toBe("user/repo");
-  });
-
-  it("handles ssh:// protocol URLs", () => {
-    expect(extractRepoPath("ssh://git@gitlab.com/org/project.git")).toEqual({
-      host: "gitlab.com",
-      repoPath: "org/project",
-    });
-  });
-
-  it("returns null for unknown hosts", () => {
-    expect(extractRepoPath("git@selfhosted.example.com:user/repo.git")).toBeNull();
-  });
-
-  it("returns null for malformed URLs", () => {
-    expect(extractRepoPath("not-a-url")).toBeNull();
+  it("adds an 's' for counts other than 1", () => {
+    expect(pluralize(0, "file")).toBe("0 files");
+    expect(pluralize(2, "file")).toBe("2 files");
   });
 });

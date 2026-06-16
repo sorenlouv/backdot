@@ -7,26 +7,13 @@ import { resolveFiles } from "../resolveFiles.js";
 import { compareFiles } from "../staging.js";
 import { isScheduled } from "../launchd.js";
 import { pluralize, errorMessage } from "../utils.js";
-import { checkRepoVisibility, type RepoVisibility } from "../repoVisibility.js";
+import { parseGitHubRepoUrl, fetchRepoAccess, resolveGitHubToken } from "../github.js";
 import { deriveKey } from "../crypto/encryption.js";
 import { resolvePassword } from "../crypto/password.js";
 
 function abbreviateHomePath(filePath: string): string {
   const home = os.homedir();
   return filePath.startsWith(home) ? "~" + filePath.slice(home.length) : filePath;
-}
-
-function formatVisibility(visibility: RepoVisibility): string {
-  switch (visibility) {
-    case "public":
-      return chalk.red.bold("public (backup disabled)");
-    case "private":
-      return chalk.green("private");
-    case "unverifiable":
-      return chalk.yellow("could not verify (network error)");
-    case "unknown":
-      return chalk.yellow("unknown (could not verify)");
-  }
 }
 
 export async function status(): Promise<void> {
@@ -49,14 +36,29 @@ export async function status(): Promise<void> {
     console.log(`  Encryption:  ${chalk.green("enabled")}`);
   }
 
-  const visibilitySpinner = ora("Checking repository visibility").start();
-  const visibility = await checkRepoVisibility(config.repository);
-  visibilitySpinner.stop();
-  if (visibility !== "private") {
-    console.log(`  Visibility:  ${formatVisibility(visibility)}`);
+  const token = resolveGitHubToken();
+  const repo = parseGitHubRepoUrl(config.repository);
+  if (!repo) {
+    console.log(`  Visibility:  ${chalk.red("invalid repository URL")}`);
+    return;
   }
 
-  if (visibility === "public") {
+  const visibilitySpinner = ora("Verifying GitHub access").start();
+  let isPrivate: boolean;
+  try {
+    ({ isPrivate } = await fetchRepoAccess(repo, token));
+  } catch (err) {
+    visibilitySpinner.stop();
+    console.log(`  Visibility:  ${chalk.yellow("could not verify")}`);
+    console.log();
+    console.log(chalk.yellow(`  ${errorMessage(err)}`));
+    console.log();
+    return;
+  }
+  visibilitySpinner.stop();
+
+  if (!isPrivate) {
+    console.log(`  Visibility:  ${chalk.red.bold("public (backup disabled)")}`);
     console.log();
     console.log(
       chalk.red(
@@ -93,6 +95,7 @@ export async function status(): Promise<void> {
         files,
         machine: config.machine,
         repository: config.repository,
+        token,
         resolveKey,
       });
     } catch (err) {

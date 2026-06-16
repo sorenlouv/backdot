@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { z } from "zod";
 import { CONFIG_PATH } from "./paths.js";
+import { isGitHubRepoUrl } from "./github.js";
 
 export { CONFIG_PATH };
 
@@ -18,7 +19,10 @@ export function expandTilde(pattern: string): string {
 }
 
 const ConfigSchema = z.object({
-  repository: z.string().min(1),
+  repository: z.string().refine(isGitHubRepoUrl, {
+    message:
+      "repository must be an HTTPS github.com URL, e.g. https://github.com/<owner>/<repo> (SSH and non-GitHub URLs are not supported)",
+  }),
   machine: z.string().min(1),
   paths: z
     .array(z.string().min(1).transform(expandTilde))

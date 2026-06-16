@@ -6,9 +6,13 @@ import { simpleGit } from "simple-git";
 import { logger } from "./log.js";
 import { pluralize } from "./utils.js";
 import { ensureRemoteUrl, getCurrentBranch, gitError } from "./git.js";
-import { STAGING_DIR, STAGING_GIT_DIR, machineDir } from "./paths.js";
+import { gitAuthConfig } from "./github.js";
+import { STAGING_DIR, STAGING_GIT_DIR, TOKEN_FILE_PATH, machineDir } from "./paths.js";
 import { encrypt, decrypt, type DerivedKey } from "./crypto/encryption.js";
 import { KEY_FILE_PATH, ENC_SUFFIX } from "./crypto/password.js";
+
+// Secrets that live under ~/.backdot but must never be pushed to the backup repo.
+const EXCLUDED_FROM_BACKUP = [KEY_FILE_PATH, TOKEN_FILE_PATH].map((p) => path.resolve(p));
 
 export { STAGING_DIR, STAGING_GIT_DIR, machineDir };
 
@@ -78,12 +82,10 @@ export function copyToStaging(files: string[], machine: string, derivedKey?: Der
   const machineStagingDir = machineDir(machine);
   fs.mkdirSync(machineStagingDir, { recursive: true });
 
-  const filesExcludingKeyFile = files.filter(
-    (f) => path.resolve(f) !== path.resolve(KEY_FILE_PATH),
-  );
+  const filesToCopy = files.filter((f) => !EXCLUDED_FROM_BACKUP.includes(path.resolve(f)));
 
   let copiedCount = 0;
-  for (const filePath of filesExcludingKeyFile) {
+  for (const filePath of filesToCopy) {
     const stagedPath = getStagedPath(filePath, machine);
     const destinationPath = derivedKey ? stagedPath + ENC_SUFFIX : stagedPath;
 
@@ -122,9 +124,10 @@ export async function compareFiles(opts: {
   files: string[];
   machine: string;
   repository: string;
+  token: string;
   resolveKey?: () => Promise<DerivedKey>;
 }): Promise<ComparisonResult> {
-  const { files, machine, repository, resolveKey } = opts;
+  const { files, machine, repository, token, resolveKey } = opts;
   if (files.length === 0) {
     return { backedUp: [], modified: [], notBackedUp: [] };
   }
@@ -133,7 +136,7 @@ export async function compareFiles(opts: {
     return emptyRemoteResult(files);
   }
 
-  const git = simpleGit(STAGING_DIR);
+  const git = simpleGit(STAGING_DIR, { config: gitAuthConfig(token) });
 
   try {
     await ensureRemoteUrl(repository);

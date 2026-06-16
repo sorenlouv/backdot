@@ -32,7 +32,8 @@ describe("init", () => {
     expect(filePath).toContain("config.json");
 
     const parsed = JSON.parse(content);
-    expect(parsed.repository).toBe("git@github.com:USERNAME/backdot-backup.git");
+    expect(parsed.repository).toBe("https://github.com/USERNAME/backdot-backup.git");
+    expect(parsed.token).toBeUndefined();
     expect(parsed.machine).toBeTruthy();
     expect(parsed.machine).not.toMatch(/\.(local|localdomain)$/);
     expect(parsed.paths).toEqual(["~/.zshrc", "~/.gitconfig"]);
@@ -47,14 +48,24 @@ describe("init", () => {
     expect(logged).toContain("already exists");
   });
 
-  it("prints repo creation deep links", () => {
+  it("prints the GitHub repo creation deep link", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
 
     init();
 
     expect(logged).toContain("github.com/new");
-    expect(logged).toContain("gitlab.com/projects/new");
-    expect(logged).toContain("bitbucket.org/repo/create");
+    expect(logged).not.toContain("gitlab.com/projects/new");
+    expect(logged).not.toContain("bitbucket.org/repo/create");
+  });
+
+  it("prints GitHub token guidance", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    init();
+
+    expect(logged).toContain("personal-access-tokens");
+    expect(logged).toContain("github.token");
+    expect(logged).toContain("BACKDOT_GITHUB_TOKEN");
   });
 
   it("prints next-step commands", () => {
