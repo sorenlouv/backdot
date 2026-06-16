@@ -158,9 +158,35 @@ describe("backdot e2e", () => {
     fs.rmSync(verifyDir, { recursive: true, force: true });
   });
 
-  it("backup with no changes still succeeds", () => {
+  it("backup with no changes still succeeds and records an empty commit", () => {
+    const countCommits = (): number => {
+      const verifyDir = path.join(tempDir, `verify-count-${Date.now()}`);
+      cloneRemote(remoteRepo, verifyDir);
+      const count = Number(
+        execSync("git rev-list --count HEAD", { cwd: verifyDir, encoding: "utf-8" }).trim(),
+      );
+      fs.rmSync(verifyDir, { recursive: true, force: true });
+      return count;
+    };
+
+    const before = countCommits();
     const output = run(["backup"], env);
     expect(output).toContain("Backup complete");
+
+    const verifyDir = path.join(tempDir, `verify-empty-${Date.now()}`);
+    cloneRemote(remoteRepo, verifyDir);
+    const after = Number(
+      execSync("git rev-list --count HEAD", { cwd: verifyDir, encoding: "utf-8" }).trim(),
+    );
+    const latestMessage = execSync("git log -1 --format=%s", {
+      cwd: verifyDir,
+      encoding: "utf-8",
+    }).trim();
+    fs.rmSync(verifyDir, { recursive: true, force: true });
+
+    // A new (empty) commit was pushed, signalling the backup ran.
+    expect(after).toBe(before + 1);
+    expect(latestMessage).toBe("backup: no changes");
   });
 
   it("status shows all files as backed up", () => {
@@ -490,6 +516,47 @@ describe("files outside HOME round-trip", () => {
     expect(run(["restore", remoteRepo, "--no-overwrite"], env)).toContain("Restored");
 
     expect(fs.readFileSync(path.join(outsideDir, "system.conf"), "utf-8")).toBe(OUTSIDE_CONTENT);
+  });
+});
+
+describe("backup with no matching files", () => {
+  it("warns, still backs up the config, and records a commit", () => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "backdot-nomatch-"));
+    try {
+      const remoteRepo = path.join(homeDir, "remote.git");
+      execSync(`git init --bare "${remoteRepo}"`, { stdio: "ignore" });
+
+      // Config is valid, but its paths match nothing on disk (e.g. a fresh
+      // machine where these dotfiles don't exist yet).
+      fs.mkdirSync(path.join(homeDir, ".backdot"), { recursive: true });
+      fs.writeFileSync(
+        path.join(homeDir, ".backdot", "config.json"),
+        JSON.stringify(
+          { repository: remoteRepo, machine: "lonely", paths: ["~/.does-not-exist"] },
+          null,
+          2,
+        ),
+      );
+
+      const output = run(["backup"], testEnv(homeDir));
+      // It does not bail out — it warns and completes.
+      expect(output).toContain("backing up config only");
+      expect(output).toContain("Backup complete");
+
+      const verifyDir = path.join(homeDir, "verify-clone");
+      cloneRemote(remoteRepo, verifyDir);
+      // The config is still backed up (the "config always backed up" invariant),
+      // and the run produced a commit rather than a silent no-op.
+      expect(fs.existsSync(path.join(verifyDir, "lonely", "home", ".backdot", "config.json"))).toBe(
+        true,
+      );
+      const commitCount = Number(
+        execSync("git rev-list --count HEAD", { cwd: verifyDir, encoding: "utf-8" }).trim(),
+      );
+      expect(commitCount).toBe(1);
+    } finally {
+      fs.rmSync(homeDir, { recursive: true, force: true });
+    }
   });
 });
 
