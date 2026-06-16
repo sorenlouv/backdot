@@ -41,10 +41,11 @@ cli
     "--no-overwrite",
     "Restore only new files; never overwrite existing ones (non-interactive)",
   )
+  .option("--dry-run", "Preview what would be restored without writing any files")
   .action(
     async (
       url: string | undefined,
-      options: { machine?: string; commit?: string; overwrite?: boolean },
+      options: { machine?: string; commit?: string; overwrite?: boolean; dryRun?: boolean },
     ) => {
       await restore({
         repoUrl: url,
@@ -52,6 +53,7 @@ cli
         // cac defaults `overwrite` to true and `--no-overwrite` flips it to false.
         skipExisting: options.overwrite === false,
         machine: options.machine,
+        dryRun: Boolean(options.dryRun),
       });
     },
   );

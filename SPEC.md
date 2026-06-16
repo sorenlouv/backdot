@@ -52,6 +52,7 @@ Options:
 - `--machine <name>` selects which machine to restore, without the interactive picker. Required when multiple machines exist and there is no interactive terminal (otherwise restore errors and lists the available machines). If the name is unknown, restore fails and lists the available machines. With a config, `--machine` overrides the configured machine; the repository still comes from config.
 - `--commit <sha>` restores from a specific earlier backup.
 - `--no-overwrite` restores without prompting: only new files are restored, and existing files are never overwritten.
+- `--dry-run` previews the restore without writing anything. It classifies each backed-up file as **new** (would be created), **changed** (exists locally but differs — restoring would overwrite your copy), or **unchanged** (identical to the backup), and shows a diff for each changed file. It writes no files, never runs the post-restore hook, and never offers to save the key file. It works without a TTY (it returns before the interactive picker), so it is scriptable. Encrypted backups are decrypted in memory only to compare and diff; when no password is available the comparison is skipped and those files are reported as "not compared". A dry run still fetches the backup into the staging dir (`~/.backdot/repo`) — "nothing is written" refers to your real files, not the staging clone.
 
 ### `history [url]`
 
