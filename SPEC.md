@@ -31,7 +31,9 @@ Creates `~/.backdot/config.json` with sensible defaults. Never overwrites an exi
 
 ### `backup`
 
-Resolves files from config, refuses if the repo is public, syncs with the remote, optionally encrypts, and pushes changes. Shows a clickable commit URL on success (GitHub, GitLab, or Bitbucket). If no files are resolved, exits early with a message.
+Resolves files from config, refuses if the repo is public, syncs with the remote, optionally encrypts, and pushes changes. Shows a clickable commit URL on success (GitHub, GitLab, or Bitbucket). If the configured paths match no files, it warns and backs up the config alone rather than bailing out.
+
+Every run produces a commit, even when nothing changed since the last backup (or no user files matched) — in that case an **empty commit** with message `backup: no changes` is created and pushed. This records that the backup ran; a missing commit would be indistinguishable from the backup process never having run.
 
 ### `restore [url]`
 

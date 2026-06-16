@@ -263,7 +263,7 @@ describe("gitCommitAndPush", () => {
     renamed: [],
   };
 
-  it("returns null when status is clean", async () => {
+  it("creates and pushes an empty commit when status is clean", async () => {
     mockGit.status.mockResolvedValue({
       isClean: () => true,
       created: [],
@@ -274,10 +274,14 @@ describe("gitCommitAndPush", () => {
 
     const result = await gitCommitAndPush();
 
-    expect(result).toBeNull();
     expect(mockGit.add).toHaveBeenCalledWith(".");
-    expect(mockGit.commit).not.toHaveBeenCalled();
-    expect(mockGit.push).not.toHaveBeenCalled();
+    expect(mockGit.commit).toHaveBeenCalledWith("backup: no changes", {
+      "--allow-empty": null,
+    });
+    expect(mockGit.push).toHaveBeenCalledWith(["-u", "origin", "HEAD"]);
+    expect(result).toEqual({
+      commitUrl: "https://github.com/user/repo/commit/abc1234",
+    });
   });
 
   it("commits, pushes, and returns commit URL for known hosts", async () => {
@@ -285,7 +289,9 @@ describe("gitCommitAndPush", () => {
 
     const result = await gitCommitAndPush();
 
-    expect(mockGit.commit).toHaveBeenCalledWith("modified: .zshrc");
+    expect(mockGit.commit).toHaveBeenCalledWith("modified: .zshrc", {
+      "--allow-empty": null,
+    });
     expect(mockGit.push).toHaveBeenCalledWith(["-u", "origin", "HEAD"]);
     expect(result).toEqual({
       commitUrl: "https://github.com/user/repo/commit/abc1234",
@@ -387,7 +393,7 @@ describe("buildCommitMessage", () => {
   }
 
   it("returns fallback when no changes", () => {
-    expect(buildCommitMessage(changes())).toBe("backup");
+    expect(buildCommitMessage(changes())).toBe("backup: no changes");
   });
 
   it("shows single modified file", () => {

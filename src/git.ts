@@ -29,7 +29,7 @@ export function buildCommitMessage(changes: FileChangeSummary, maxLength = 250):
   ].filter((category) => category.files.length > 0);
 
   if (categories.length === 0) {
-    return "backup";
+    return "backup: no changes";
   }
 
   function formatCategory(category: (typeof categories)[number], listFiles: boolean): string {
@@ -152,19 +152,21 @@ export async function gitLog(
   }));
 }
 
-export async function gitCommitAndPush(): Promise<{ commitUrl: string | null } | null> {
+export async function gitCommitAndPush(): Promise<{ commitUrl: string | null }> {
   const git = simpleGit(STAGING_DIR);
 
   await git.add(".");
 
   const status = await git.status();
   if (status.isClean()) {
-    logger.info("No changes to commit");
-    return null;
+    logger.info("No changes to back up — recording an empty commit to signal the run");
   }
 
+  // Always commit, even when nothing changed: an empty commit is a positive
+  // signal that the backup ran. Skipping the commit would be indistinguishable
+  // from the backup process never having run at all.
   const message = buildCommitMessage(status);
-  await git.commit(message);
+  await git.commit(message, { "--allow-empty": null });
 
   const remoteUrl = ((await git.remote(["get-url", "origin"])) ?? "").trim();
 

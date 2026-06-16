@@ -84,8 +84,12 @@ export async function backup(): Promise<void> {
     logger.info(`Resolved ${pluralize(userFiles.length, "file")}`);
 
     if (userFiles.length === 0) {
-      spinner.info("No files resolved, nothing to back up");
-      return;
+      // Don't bail out: the config is still backed up below, and the run still
+      // produces a commit. A silent no-op here would be indistinguishable from
+      // the backup never running — exactly what we want to avoid.
+      logger.warn("No user files resolved — backing up config only");
+      spinner.warn("No files matched your config paths — backing up config only");
+      spinner.start();
     }
 
     const files = [...userFiles, CONFIG_PATH];
@@ -134,7 +138,7 @@ export async function backup(): Promise<void> {
     spinner.text = "Pushing to remote";
     const result = await gitCommitAndPush();
 
-    const successMsg = result?.commitUrl
+    const successMsg = result.commitUrl
       ? `Backup complete → ${result.commitUrl}`
       : "Backup complete";
     spinner.succeed(successMsg);

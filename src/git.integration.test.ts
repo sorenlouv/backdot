@@ -326,7 +326,7 @@ describe("gitCommitAndPush (integration)", () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("returns null when staging is clean", async () => {
+  it("creates and pushes an empty commit when staging is clean", async () => {
     const remote = path.join(tempDir, "clean-remote.git");
     createBareRepo(remote);
     addCommitToRemote(remote, "seed.txt", "seed\n");
@@ -334,8 +334,32 @@ describe("gitCommitAndPush (integration)", () => {
     STAGING = path.join(tempDir, `staging-clean-${Date.now()}`);
     await gitPull(remote);
 
+    const headBefore = (await simpleGit(STAGING).revparse(["HEAD"])).trim();
+
     const result = await gitCommitAndPush();
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+
+    // A new commit exists locally...
+    const git = simpleGit(STAGING);
+    const headAfter = (await git.revparse(["HEAD"])).trim();
+    expect(headAfter).not.toBe(headBefore);
+
+    const log = await git.log({ maxCount: 1 });
+    expect(log.latest!.message).toBe("backup: no changes");
+
+    // ...it carries no file changes...
+    const diff = await git.diff([`${headBefore}..${headAfter}`]);
+    expect(diff).toBe("");
+
+    // ...and it was pushed to the remote.
+    const verifyDir = path.join(tempDir, `verify-empty-${Date.now()}`);
+    execSync(`git clone "${remote}" "${verifyDir}"`, { stdio: "ignore" });
+    const remoteHead = execSync("git rev-parse HEAD", {
+      cwd: verifyDir,
+      encoding: "utf-8",
+    }).trim();
+    expect(remoteHead).toBe(headAfter);
+    fs.rmSync(verifyDir, { recursive: true, force: true });
   });
 
   it("commits and pushes new files to the remote", async () => {
